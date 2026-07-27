@@ -1,8 +1,8 @@
-// Self-contained localization for the viewer. Deliberately NOT wired to the host's ABP-driven
-// localization pipeline: the viewer is AGPL-isolated in an iframe, so it carries its own tiny
-// bundled dictionaries and learns the locale from the `?lang=` URL param the host appends to the
-// iframe src (alongside `?host=`). The param is available synchronously at load, which matters
-// because most viewer text is static markup in index.html that paints before any postMessage.
+// Self-contained localization for the viewer. It is deliberately not wired to any host localization
+// mechanism: it carries its own small bundled dictionaries and learns the locale from the `?lang=`
+// URL param the host appends to the iframe src (alongside `?host=`). The param is available
+// synchronously at load, which matters because most viewer text is static markup in index.html that
+// paints before any postMessage.
 
 import cs from './cs.json';
 import en from './en.json';
@@ -26,7 +26,7 @@ const dictionary: Dictionary = DICTIONARIES[locale];
 
 /**
  * Look up a translation and substitute positional `{0}`, `{1}`, … placeholders.
- * Falls back to the raw key when a translation is missing (mirrors the SPA's `L()` semantics).
+ * Falls back to the raw key when a translation is missing.
  */
 export function t(key: string, ...params: string[]): string {
 	const template = dictionary[key] ?? key;

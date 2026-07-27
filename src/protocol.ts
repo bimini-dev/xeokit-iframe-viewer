@@ -8,18 +8,15 @@
 /**
  * postMessage boundary contract between a host application and this xeokit viewer (iframe).
  *
- * This file is the single source of truth for the protocol. The host application keeps its own copy;
- * the two MUST be kept in sync by hand — they are intentionally NOT a shared package, so that no code
- * crosses the AGPL boundary between the (typically proprietary) host and this (AGPL-3.0) viewer.
- *
- * Only the header above the marker below differs between the copies; the contract itself is compared
- * byte-for-byte in CI by `scripts/check-protocol-sync.mjs`.
+ * This file is the authoritative definition of the protocol. It is deliberately not distributed as a
+ * shared package — a host implements the contract independently, so no code crosses the licensing
+ * boundary in either direction.
  *
  * Every message carries `channel: 'xeokit-viewer'` and `protocolVersion` so both sides can reject
  * foreign / mismatched messages. Origins are validated separately by the transport (see bridge.ts).
  */
 
-// ─── SHARED CONTRACT: everything below this line MUST be byte-identical in both copies ───
+// ─── Protocol contract ───
 
 export const PROTOCOL_CHANNEL = 'xeokit-viewer' as const;
 export const PROTOCOL_VERSION = 1 as const;

@@ -1,14 +1,11 @@
-# Build context is this app's own root (viewer-app/), so the image builds identically from the
-# monorepo and from the standalone published repository. Publishing it is also the honest reading of
-# AGPL-3.0 "Corresponding Source", which includes the scripts controlling compilation and installation.
+# Build context is this app's own root, so the image builds from a plain clone of this repository.
 FROM node:24.18-alpine AS build
 RUN npm install -g pnpm@latest
 WORKDIR /app
 COPY . ./
 RUN pnpm install --frozen-lockfile
 
-# Stamped into the about dialog so a user can find the source matching this build (AGPL-3.0 §13).
-# The pipeline passes the upstream commit; local builds keep the 'dev' default.
+# Stamped into the about dialog so a user can identify the source matching this build (AGPL-3.0 §13).
 ARG VIEWER_COMMIT=dev
 ENV VIEWER_COMMIT=$VIEWER_COMMIT
 RUN pnpm run build

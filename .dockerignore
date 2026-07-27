@@ -1,5 +1,4 @@
-# The image builds with this app's own root as the context (see docker/Dockerfile), so these must be
-# excluded here — the monorepo's root .dockerignore does not apply to this build.
+# The image builds with this app's own root as the build context (see docker/Dockerfile).
 node_modules
 dist
 .vite

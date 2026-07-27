@@ -11,8 +11,7 @@ const port: number = Number(process.env.VIEWER_PORT ?? 5273);
 
 // AGPL-3.0 §13 offers the source *corresponding to the running version*, so the about dialog prints the
 // build's version and commit. VIEWER_COMMIT is injected by the image build (docker/Dockerfile);
-// local builds fall back to 'dev'. The commit is the upstream revision recorded in the matching
-// "Sync viewer source @ ..." commit of the published repository.
+// local builds fall back to 'dev'.
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
 	version: string;
 };

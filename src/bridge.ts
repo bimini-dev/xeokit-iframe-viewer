@@ -24,7 +24,7 @@ function resolveHostOrigin(): string {
 			/* fall through */
 		}
 	}
-	// Fail closed in production builds: a deployed viewer is always framed by the SPA with a ?host
+	// Fail closed in production builds: a deployed viewer is always framed by a host that sets ?host
 	// origin, so a missing one means a misconfiguration (or an attempt to drive the viewer directly).
 	// Return a sentinel that can never equal a real event.origin, so onMessage rejects every message.
 	if (import.meta.env.PROD) {
