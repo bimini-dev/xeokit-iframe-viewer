@@ -19,6 +19,10 @@
 // ─── Protocol contract ───
 
 export const PROTOCOL_CHANNEL = 'xeokit-viewer' as const;
+/**
+ * Incremented only when a change below breaks compatibility between host and viewer. The viewer's
+ * package version is bumped with it; a build is otherwise identified by its commit, not its version.
+ */
 export const PROTOCOL_VERSION = 1 as const;
 
 /** Supported model container formats the viewer can decode from raw bytes. */
