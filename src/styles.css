@@ -1,0 +1,183 @@
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+:root {
+	--bg: #ffffff;
+	--surface: #f6f8fa;
+	--surface2: #eaeef2;
+	--border: #d0d7de;
+	--accent: #0969da;
+	--accent2: #1a7f37;
+	--text: #1f2328;
+	--muted: #656d76;
+	--danger: #cf222e;
+	--primary: #0c30a3; /* oklch(0.379 0.188 264.5) */
+	--font: 'Consolas', 'JetBrains Mono', monospace;
+}
+html,
+body {
+	height: 100%;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font);
+	overflow: hidden;
+}
+
+.hidden {
+	display: none;
+}
+
+#xeoCanvas {
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: 100vh;
+	display: block;
+}
+
+.hint {
+	position: fixed;
+	bottom: 10px;
+	left: 44px;
+	font-size: 10px;
+	color: var(--muted);
+	pointer-events: none;
+	line-height: 1.7;
+}
+
+/* Comment markers (AnnotationsPlugin markerHTML) */
+.comment-marker {
+	position: absolute;
+	z-index: 40;
+	pointer-events: auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	cursor: pointer;
+	/* Center the dot on the projected anchor point (plugin sets left/top to that point). */
+	transform: translate(-50%, -50%);
+}
+.comment-marker-dot {
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: #8b949e;
+	border: 2px solid #fff;
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.4),
+		0 1px 4px rgba(0, 0, 0, 0.5);
+	transition:
+		transform 0.1s,
+		background 0.1s;
+}
+.comment-marker.selected .comment-marker-dot {
+	background: var(--primary);
+}
+.comment-marker:hover .comment-marker-dot {
+	transform: scale(1.25);
+}
+
+/* About / license dialog (AGPL notices) */
+.about-fab {
+	/* Above xeokit comment markers (they set an inline z-index of ~90005) so the license button and
+     its popup are never covered by a dot. */
+	position: fixed;
+	left: 10px;
+	bottom: 8px;
+	z-index: 100000;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: none;
+	border: none;
+	color: var(--muted);
+	font-family: var(--font);
+	font-size: 13px;
+	line-height: 1;
+	cursor: pointer;
+}
+.about-fab:hover {
+	color: var(--accent);
+}
+
+.about-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 100001;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.35);
+}
+.about-overlay[hidden] {
+	display: none;
+}
+.about-dialog {
+	position: relative;
+	max-width: 460px;
+	width: calc(100% - 40px);
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 22px 24px;
+	color: var(--text);
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+.about-close {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	background: none;
+	border: none;
+	color: var(--muted);
+	font-size: 14px;
+	cursor: pointer;
+}
+.about-close:hover {
+	color: var(--danger);
+}
+.about-title {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--accent);
+	text-transform: uppercase;
+}
+.about-version {
+	font-size: 11px;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	margin-top: 4px;
+}
+.about-copy {
+	font-size: 12px;
+	color: var(--muted);
+	margin: 2px 0 14px;
+}
+.about-text {
+	font-size: 12px;
+	line-height: 1.6;
+	margin-bottom: 10px;
+}
+.about-links {
+	display: flex;
+	gap: 16px;
+	margin: 16px 0 10px;
+}
+.about-links a {
+	color: var(--accent);
+	font-size: 12px;
+	text-decoration: underline;
+}
+.about-thirdparty {
+	font-size: 11px;
+	color: var(--muted);
+}

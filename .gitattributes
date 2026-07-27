@@ -1,0 +1,17 @@
+# This app is published as a standalone repository, where it no longer inherits the monorepo's
+# root .gitattributes — so it carries its own copy of the line-ending policy.
+
+# Normalize line endings to LF for all text files
+* text=auto eol=lf
+
+# Binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.otf binary

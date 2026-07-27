@@ -1,0 +1,24 @@
+# Rendered at container start by the nginx image's envsubst entrypoint (/etc/nginx/templates).
+# Only variables that exist in the environment are substituted, so nginx's own $uri is left alone.
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # The viewer is meant to be embedded by a host application, so DO NOT send X-Frame-Options.
+    # frame-ancestors must be sent as an HTTP header (browsers ignore it on a <meta> tag).
+    # Set FRAME_ANCESTORS to the origin(s) allowed to embed the viewer; it defaults to 'self',
+    # which blocks embedding entirely, so a real deployment must override it.
+    add_header Content-Security-Policy "frame-ancestors ${FRAME_ANCESTORS}" always;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Static assets are content-hashed by Vite → safe to cache aggressively.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}

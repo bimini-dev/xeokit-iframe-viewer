@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="cs">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<!-- Anti-clickjacking is enforced via the frame-ancestors CSP *response header* (ignored by browsers
+       when set on a <meta> tag): the Vite dev server sets it in vite.config.ts, and production sets it at
+       the reverse proxy (see docker/nginx.conf). The viewer holds no secrets/auth; the real trust
+       boundary is the postMessage origin allowlist (?host) plus the embedding host app's own frame-src. -->
+		<title>xeokit Viewer</title>
+	</head>
+	<body>
+		<canvas id="xeoCanvas"></canvas>
+
+		<button
+			class="about-fab"
+			id="btnAbout"
+			data-i18n-title="about.button"
+			data-i18n-aria-label="about.button"
+		>
+			&#169;
+		</button>
+
+		<div class="hint" data-i18n="hint"></div>
+
+		<!-- AGPL-3.0 "Appropriate Legal Notices" (§5d) + network source offer (§13). -->
+		<div id="aboutOverlay" class="about-overlay" hidden>
+			<div class="about-dialog" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+				<button
+					class="about-close"
+					id="btnAboutClose"
+					data-i18n-title="about.close"
+					data-i18n-aria-label="about.close"
+				>
+					✕
+				</button>
+				<div class="about-title" id="aboutTitle">xeokit iframe viewer</div>
+				<!-- Identifies the running build so a user can locate the matching source (AGPL-3.0 §13). -->
+				<div class="about-version" id="aboutVersion"></div>
+				<div class="about-copy">Copyright © 2026 bimini-dev</div>
+				<p class="about-text">
+					This program is free software: you can redistribute it and/or modify it under the terms of
+					the GNU Affero General Public License as published by the Free Software Foundation, either
+					version 3 of the License, or (at your option) any later version.
+				</p>
+				<p class="about-text"><strong>This program comes with ABSOLUTELY NO WARRANTY.</strong></p>
+				<div class="about-links">
+					<a href="/LICENSE.txt" target="_blank" rel="noopener">Full license (AGPL-3.0)</a>
+					<a
+						href="https://github.com/bimini-dev/xeokit-iframe-viewer"
+						target="_blank"
+						rel="noopener"
+						>Source code</a
+					>
+				</div>
+				<p class="about-thirdparty">Built with xeokit-sdk (AGPL-3.0).</p>
+			</div>
+		</div>
+
+		<script type="module" src="/src/main.ts"></script>
+	</body>
+</html>
