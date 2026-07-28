@@ -10,4 +10,9 @@ declare module '@xeokit/xeokit-sdk' {
 		/** Forces an immediate re-render of the scene. */
 		glRedraw(): void;
 	}
+
+	interface DistanceMeasurement {
+		/** Formats the length label. A documented setter in the SDK's source, absent from its types. */
+		labelStringFormat: (length: number) => string;
+	}
 }

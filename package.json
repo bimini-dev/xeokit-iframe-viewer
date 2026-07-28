@@ -1,6 +1,6 @@
 {
 	"name": "xeokit-iframe-viewer",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "Open-source (AGPL-3.0) xeokit 3D model viewer, embeddable in a host application via an iframe + postMessage boundary.",
 	"license": "AGPL-3.0-only",
 	"private": false,

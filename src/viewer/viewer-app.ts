@@ -14,16 +14,21 @@ import type {
 	CommentMarker,
 	ElementDescriptor,
 	ModelFormat,
+	ModelUnit,
 	UpAxis,
+	ViewerTool,
 	ZoomDirection
 } from '../protocol';
 import { buildJsonModel, buildXktEntityList } from './loaders';
 import { CommentMarkers, type ResolvedMarker } from './markers';
+import { DistanceMeasure } from './measure';
 import type { EntityRecord, ModelData, ModelRecord } from './types';
 
 // Progressive zoom: each toolbar click / wheel notch scales the camera distance by this factor
 // (≈10% of the current zoom level, so it moves fast at high magnification). MIN is the zoom-out floor.
 const ZOOM_STEP_FACTOR = 1.1;
+// Ctrl-modified step (≈1% per notch/click), for creeping up on a framing the normal step overshoots.
+const FINE_ZOOM_STEP_FACTOR = 1.01;
 const MIN_ZOOM_PCT = 10;
 // Angle (deg) the target should subtend when framing an element, matching xeokit's default fitFOV.
 const FIT_FOV_DEG = 45;
@@ -68,6 +73,10 @@ export class ViewerApp {
 	private viewer: Viewer;
 	private xktLoader: XKTLoaderPlugin;
 	private markers: CommentMarkers;
+	private measure: DistanceMeasure;
+	// What a click does. While measuring, element picking (and the comment pins) stay out of the way
+	// so a measurement click never doubles as a selection.
+	private tool: ViewerTool = 'select';
 
 	private models: ModelRecord[] = [];
 	private index = new Map<string, { e: EntityRecord; m: ModelRecord }>(); // sceneId → …
@@ -138,8 +147,10 @@ export class ViewerApp {
 		this.viewer.camera.up = [0, 1, 0];
 
 		this.markers = new CommentMarkers(this.viewer, (elementId) => {
+			if (this.tool === 'measure') return;
 			this.cb.onCommentMarkerClicked(elementId, this.cameraState());
 		});
+		this.measure = new DistanceMeasure(this.viewer, els.canvas);
 
 		this.initCanvas();
 		this.initPicking();
@@ -172,6 +183,8 @@ export class ViewerApp {
 	clearModel(): void {
 		this.select(null);
 		this.markers.clear();
+		// A measurement is anchored in world space; it would hang in the void without its geometry.
+		this.measure.clear();
 		for (const m of this.models) m.sm.destroy();
 		this.models = [];
 		this.reindex();
@@ -255,10 +268,11 @@ export class ViewerApp {
 	/**
 	 * Zoom progressively: `in`/`out` scale the camera distance by a fixed factor (≈10% of the current
 	 * level per step, so it moves quickly at high magnification), `reset` returns to the 100% fit
-	 * distance. The new percentage is reported to the host by the camera-move handler. Used by both the
-	 * toolbar buttons and the mouse wheel.
+	 * distance. `fine` (Ctrl held) uses a much smaller factor for precise framing. The new percentage
+	 * is reported to the host by the camera-move handler. Used by both the toolbar buttons and the
+	 * mouse wheel.
 	 */
-	zoomStep(direction: ZoomDirection): void {
+	zoomStep(direction: ZoomDirection, fine: boolean = false): void {
 		if (this.fitDistance <= 0) return;
 		if (direction === 'reset') {
 			this.setCameraDistance(this.fitDistance);
@@ -266,7 +280,8 @@ export class ViewerApp {
 		}
 		const dist = this.cameraDistance();
 		if (dist <= 0) return;
-		const next = dist * (direction === 'in' ? 1 / ZOOM_STEP_FACTOR : ZOOM_STEP_FACTOR);
+		const factor = fine ? FINE_ZOOM_STEP_FACTOR : ZOOM_STEP_FACTOR;
+		const next = dist * (direction === 'in' ? 1 / factor : factor);
 		// Never zoom out past the floor (largest allowed distance = fitDistance / (MIN%/100)).
 		this.setCameraDistance(Math.min(next, (this.fitDistance * 100) / MIN_ZOOM_PCT));
 	}
@@ -356,6 +371,21 @@ export class ViewerApp {
 		scene.setObjectsXRayed(keep, false);
 	}
 
+	/**
+	 * Switch what a click does: pick elements, or measure a distance between two picked points.
+	 * Leaving the measure tool discards the segment on screen.
+	 */
+	setTool(tool: ViewerTool): void {
+		if (tool === this.tool) return;
+		this.tool = tool;
+		this.measure.setActive(tool === 'measure');
+	}
+
+	/** Set the unit the model's coordinates are authored in (drives real measured lengths). */
+	setModelUnit(unit: ModelUnit): void {
+		this.measure.setModelUnit(unit);
+	}
+
 	showAll(): void {
 		Object.values(this.viewer.scene.objects).forEach((o) => (o.visible = true));
 	}
@@ -377,6 +407,9 @@ export class ViewerApp {
 		if (zUp === this.zUp) return;
 		this.zUp = zUp;
 		for (const m of this.models) m.sm.matrix = zUp ? ZMAT : YMAT;
+		// The measured points are world-space and do not travel with the rotated model — drop the
+		// segment rather than leaving it pointing at the wrong place.
+		this.measure.clear();
 		if (!this.models.length) return;
 		// Re-frame the model in the new orientation (re-establishing the 100% zoom baseline). The host
 		// re-sends comment markers, whose anchors move with the model.
@@ -528,6 +561,9 @@ export class ViewerApp {
 
 	private initPicking(): void {
 		this.viewer.scene.input.on('mouseclicked', (coords: number[]) => {
+			// While measuring, a click places a measurement point — it must not also select whatever is
+			// under it (which would highlight the element and open its detail in the host).
+			if (this.tool === 'measure') return;
 			const hit = this.viewer.scene.pick({ canvasPos: coords });
 			if (hit?.entity) {
 				this.select(String(hit.entity.id), hit.worldPos);
@@ -635,9 +671,11 @@ export class ViewerApp {
 		canvas.addEventListener(
 			'wheel',
 			(e) => {
+				// Also swallows the browser's own Ctrl+wheel page zoom, which would otherwise fight the
+				// fine-zoom gesture below.
 				e.preventDefault();
-				// One step per notch, matching the toolbar buttons (scroll up = zoom in).
-				this.zoomStep(e.deltaY < 0 ? 'in' : 'out');
+				// One step per notch, matching the toolbar buttons (scroll up = zoom in); Ctrl = fine step.
+				this.zoomStep(e.deltaY < 0 ? 'in' : 'out', e.ctrlKey);
 			},
 			{ passive: false }
 		);

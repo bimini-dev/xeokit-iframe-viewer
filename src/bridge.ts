@@ -93,13 +93,19 @@ export class ViewerBridge {
 				this.app.clearModel();
 				break;
 			case 'zoom':
-				this.app.zoomStep(msg.direction);
+				this.app.zoomStep(msg.direction, msg.fine);
 				break;
 			case 'setUpAxis':
 				this.app.setUpAxis(msg.axis);
 				break;
 			case 'isolateElement':
 				this.app.isolateElements(msg.elementIds);
+				break;
+			case 'setTool':
+				this.app.setTool(msg.tool);
+				break;
+			case 'setModelUnit':
+				this.app.setModelUnit(msg.unit);
 				break;
 			default: {
 				const _exhaustive: never = msg;

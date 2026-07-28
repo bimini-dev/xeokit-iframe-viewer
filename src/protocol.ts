@@ -20,8 +20,14 @@
 
 export const PROTOCOL_CHANNEL = 'xeokit-viewer' as const;
 /**
- * Incremented only when a change below breaks compatibility between host and viewer. The viewer's
- * package version is bumped with it; a build is otherwise identified by its commit, not its version.
+ * Incremented only when a change below breaks compatibility between host and viewer — `isEnvelope`
+ * rejects a mismatched version outright, so a bump means both sides must ship together. Additive
+ * messages and optional fields do not qualify, and note that this number is the only capability
+ * signal a host ever receives: the package version never crosses the boundary.
+ *
+ * The package version is independent, and follows ordinary semver over user-visible change. The two
+ * answer different questions — whether these two can talk, versus what is in this build. Neither
+ * identifies a build exactly; the commit stamped into the about dialog does.
  */
 export const PROTOCOL_VERSION = 1 as const;
 
@@ -113,6 +119,8 @@ export type ZoomDirection = 'in' | 'out' | 'reset';
 export interface ZoomMessage {
 	type: 'zoom';
 	direction: ZoomDirection;
+	/** Take a much smaller step (the host sends this when Ctrl is held). Ignored by `reset`. */
+	fine?: boolean;
 }
 
 /** Which world axis points up. Models are rotated to match; `y` is the default. */
@@ -129,6 +137,32 @@ export interface IsolateElementMessage {
 	elementIds: string[] | null;
 }
 
+/**
+ * What a click in the 3D view does: pick an element (`select`), or place the two ends of a distance
+ * measurement (`measure`). Only one is active at a time — the viewer suppresses element picking
+ * while measuring.
+ */
+export type ViewerTool = 'select' | 'measure';
+
+/** Switch the active pointer tool. Leaving `measure` discards the measurement on screen. */
+export interface SetToolMessage {
+	type: 'setTool';
+	tool: ViewerTool;
+}
+
+/**
+ * The unit a model's world coordinates are authored in. Like the up-axis, this describes the model
+ * rather than the presentation: it tells the viewer how to read the geometry, so measurements come
+ * out as real lengths. The label's own unit is chosen per measurement from its magnitude.
+ */
+export type ModelUnit = 'mm' | 'cm' | 'm';
+
+/** Set how the model's coordinates are interpreted. Re-labels the measurement already on screen. */
+export interface SetModelUnitMessage {
+	type: 'setModelUnit';
+	unit: ModelUnit;
+}
+
 export type HostToViewerMessage =
 	| InitMessage
 	| LoadModelMessage
@@ -139,7 +173,9 @@ export type HostToViewerMessage =
 	| ClearModelMessage
 	| ZoomMessage
 	| SetUpAxisMessage
-	| IsolateElementMessage;
+	| IsolateElementMessage
+	| SetToolMessage
+	| SetModelUnitMessage;
 
 // ── Viewer → Host ────────────────────────────────────────────────────────────
 
