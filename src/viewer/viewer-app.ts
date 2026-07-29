@@ -58,7 +58,14 @@ export interface ViewerAppCallbacks {
 		camera?: CameraState,
 		properties?: Record<string, string>
 	) => void;
-	onCommentMarkerClicked: (elementId: string, camera: CameraState) => void;
+	onCommentMarkerClicked: (id: string, elementId: string | null, camera: CameraState) => void;
+	onNotePlaced: (
+		mode: 'element' | 'point',
+		elementId: string | null,
+		label: string | undefined,
+		worldPos: [number, number, number] | undefined,
+		camera: CameraState
+	) => void;
 	onCameraChanged: (camera: CameraState) => void;
 	onZoomChanged: (percent: number) => void;
 }
@@ -146,9 +153,11 @@ export class ViewerApp {
 		// Always Y-up: ZMAT maps Z-up source data into xeokit's Y-up world (matches camera.worldUp).
 		this.viewer.camera.up = [0, 1, 0];
 
-		this.markers = new CommentMarkers(this.viewer, (elementId) => {
-			if (this.tool === 'measure') return;
-			this.cb.onCommentMarkerClicked(elementId, this.cameraState());
+		this.markers = new CommentMarkers(this.viewer, (id, elementId) => {
+			// Only the select tool opens a pin: while measuring or placing a note, a click on a pin is
+			// meant for that tool, not for the thread behind the pin.
+			if (this.tool !== 'select') return;
+			this.cb.onCommentMarkerClicked(id, elementId, this.cameraState());
 		});
 		this.measure = new DistanceMeasure(this.viewer, els.canvas);
 
@@ -337,19 +346,22 @@ export class ViewerApp {
 	setCommentMarkers(markers: CommentMarker[]): void {
 		const resolved: ResolvedMarker[] = [];
 		for (const marker of markers) {
+			const elementId = marker.elementId ?? null;
+			// A marker must have an identity to be reported back on click; the element id is the fallback
+			// for hosts that pin at most one marker per element.
+			const id = marker.id ?? elementId;
+			if (!id) continue;
 			if (marker.anchor) {
 				// The host stores anchors canonical; rotate into the current world space to place them.
-				resolved.push({
-					elementId: marker.elementId,
-					worldPos: toWorldVec(marker.anchor, this.zUp)
-				});
+				// Nothing is looked up here, so a purely spatial marker renders even with no element.
+				resolved.push({ id, elementId, worldPos: toWorldVec(marker.anchor, this.zUp) });
 				continue;
 			}
 			// No stored anchor: fall back to the object's current-world AABB centre (already world space).
-			const sceneId = this.elemToScene.get(marker.elementId);
+			const sceneId = elementId ? this.elemToScene.get(elementId) : undefined;
 			const obj = sceneId ? this.viewer.scene.objects[sceneId] : null;
 			const center = aabbCenter(obj);
-			if (center) resolved.push({ elementId: marker.elementId, worldPos: center });
+			if (center) resolved.push({ id, elementId, worldPos: center });
 		}
 		this.markers.set(resolved);
 	}
@@ -372,13 +384,19 @@ export class ViewerApp {
 	}
 
 	/**
-	 * Switch what a click does: pick elements, or measure a distance between two picked points.
-	 * Leaving the measure tool discards the segment on screen.
+	 * Switch what a click does: pick elements, measure a distance between two picked points, or
+	 * anchor a note. Leaving the measure tool discards the segment on screen.
 	 */
 	setTool(tool: ViewerTool): void {
 		if (tool === this.tool) return;
 		this.tool = tool;
 		this.measure.setActive(tool === 'measure');
+		// A crosshair is the only affordance the user gets that the next click will drop a note.
+		this.els.canvas.style.cursor = this.isNoteTool(tool) ? 'crosshair' : '';
+	}
+
+	private isNoteTool(tool: ViewerTool): boolean {
+		return tool === 'noteElement' || tool === 'notePoint';
 	}
 
 	/** Set the unit the model's coordinates are authored in (drives real measured lengths). */
@@ -561,6 +579,12 @@ export class ViewerApp {
 
 	private initPicking(): void {
 		this.viewer.scene.input.on('mouseclicked', (coords: number[]) => {
+			// An armed note tool takes the click outright: it anchors a note rather than changing the
+			// selection, so the host's create dialog opens against exactly what the user aimed at.
+			if (this.isNoteTool(this.tool)) {
+				this.placeNote(coords, this.tool === 'notePoint');
+				return;
+			}
 			// While measuring, a click places a measurement point — it must not also select whatever is
 			// under it (which would highlight the element and open its detail in the host).
 			if (this.tool === 'measure') return;
@@ -571,6 +595,35 @@ export class ViewerApp {
 			}
 			this.select(this.pick2DLine(coords, 10));
 		});
+	}
+
+	/**
+	 * Anchor a note to the clicked element, or to the exact point where the click met its surface.
+	 * A click that misses geometry reports nothing, so the tool stays armed and the user just clicks
+	 * again rather than having the mode silently fall away under them.
+	 */
+	private placeNote(coords: number[], wantPoint: boolean): void {
+		// `pickSurface` is what makes xeokit compute the ray/triangle intersection; without it the pick
+		// result carries no worldPos at all and the anchor would silently collapse to the AABB centre.
+		const hit = this.viewer.scene.pick({ canvasPos: coords, pickSurface: wantPoint });
+		if (!hit?.entity) return;
+		const worldPos = wantPoint ? hit.worldPos : null;
+		if (wantPoint && !worldPos) return;
+		const sceneId = String(hit.entity.id);
+		const e = this.index.get(sceneId)?.e;
+		this.cb.onNotePlaced(
+			wantPoint ? 'point' : 'element',
+			e?.id ?? null,
+			e?.label,
+			// Canonical space, so a pin survives an up-axis switch exactly like a saved camera does.
+			worldPos ? toCanonicalVec(worldPos, this.zUp) : undefined,
+			this.cameraState()
+		);
+		// Which element a clicked surface belongs to is not obvious — a wall, its cladding and the
+		// room all sit under the same pixel — so highlight what we understood before the host opens
+		// its create dialog. A point anchor is exactly where the user clicked and needs no such
+		// confirmation. Emitted after onNotePlaced so the host can suppress the selection echo.
+		if (!wantPoint) this.select(sceneId);
 	}
 
 	private select(sceneId: string | null, worldPos?: number[], memberSceneIds?: string[]): void {

@@ -8,15 +8,20 @@ import { t } from '../i18n';
 
 /** A marker whose world anchor has already been resolved by ViewerApp. */
 export interface ResolvedMarker {
-	elementId: string;
+	/** Identity of this marker, reported back on click. Several markers may share one element. */
+	id: string;
+	/** The element the marker is pinned to; null for a marker anchored purely in space. */
+	elementId: string | null;
 	worldPos: [number, number, number];
 }
 
-// `{{elementId}}` is filled per-annotation from `values` (AnnotationsPlugin uses {{...}} templating)
-// so the marker DOM node can be found by element id to toggle its selected state.
+// `{{markerId}}` / `{{elementId}}` are filled per-annotation from `values` (AnnotationsPlugin uses
+// {{...}} templating). The marker id identifies the clicked pin; the element id is what the selected
+// state is toggled by, so selecting an element lights up every pin sitting on it.
 function buildMarkerHtml(): string {
 	return (
-		`<div class="comment-marker" data-comment-el="{{elementId}}" title="${t('marker.showComment')}">` +
+		'<div class="comment-marker" data-comment-id="{{markerId}}" data-comment-el="{{elementId}}" ' +
+		`title="${t('marker.showComment')}">` +
 		'<div class="comment-marker-dot"></div>' +
 		'</div>'
 	);
@@ -24,17 +29,18 @@ function buildMarkerHtml(): string {
 
 export class CommentMarkers {
 	private plugin: AnnotationsPlugin;
-	private byAnnotationId = new Map<string, string>(); // annotationId → elementId
+	// annotationId → the marker's identity and the element it belongs to (null when purely spatial)
+	private byAnnotationId = new Map<string, { id: string; elementId: string | null }>();
 	private selectedElementId: string | null = null;
 
-	constructor(viewer: Viewer, onMarkerClicked: (elementId: string) => void) {
+	constructor(viewer: Viewer, onMarkerClicked: (id: string, elementId: string | null) => void) {
 		this.plugin = new AnnotationsPlugin(viewer, {
 			markerHTML: buildMarkerHtml(),
 			values: {}
 		});
 		this.plugin.on('markerClicked', (annotation) => {
-			const elementId = this.byAnnotationId.get(annotation.id);
-			if (elementId) onMarkerClicked(elementId);
+			const marker = this.byAnnotationId.get(annotation.id);
+			if (marker) onMarkerClicked(marker.id, marker.elementId);
 		});
 	}
 
@@ -42,7 +48,7 @@ export class CommentMarkers {
 	set(markers: ResolvedMarker[]): void {
 		this.clear();
 		for (const marker of markers) {
-			const annotationId = 'comment-' + marker.elementId;
+			const annotationId = 'comment-' + marker.id;
 			this.plugin.createAnnotation({
 				id: annotationId,
 				worldPos: marker.worldPos,
@@ -51,9 +57,9 @@ export class CommentMarkers {
 				occludable: false,
 				markerShown: true,
 				labelShown: false,
-				values: { elementId: marker.elementId }
+				values: { markerId: marker.id, elementId: marker.elementId ?? '' }
 			});
-			this.byAnnotationId.set(annotationId, marker.elementId);
+			this.byAnnotationId.set(annotationId, { id: marker.id, elementId: marker.elementId });
 		}
 		// Recreated markers lost their selected class — reapply the current selection.
 		this.applySelection();

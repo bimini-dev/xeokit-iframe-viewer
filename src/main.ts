@@ -18,8 +18,10 @@ const app = new ViewerApp(
 		onLoadError: (message) => bridge.ref?.emit({ type: 'loadError', message }),
 		onElementSelected: (elementId, label, worldPos, camera, properties) =>
 			bridge.ref?.emit({ type: 'elementSelected', elementId, label, worldPos, camera, properties }),
-		onCommentMarkerClicked: (elementId, camera) =>
-			bridge.ref?.emit({ type: 'commentMarkerClicked', elementId, camera }),
+		onCommentMarkerClicked: (id, elementId, camera) =>
+			bridge.ref?.emit({ type: 'commentMarkerClicked', id, elementId, camera }),
+		onNotePlaced: (mode, elementId, label, worldPos, camera) =>
+			bridge.ref?.emit({ type: 'notePlaced', mode, elementId, label, worldPos, camera }),
 		onCameraChanged: (camera) => bridge.ref?.emit({ type: 'cameraChanged', camera }),
 		onZoomChanged: (percent) => bridge.ref?.emit({ type: 'zoomChanged', percent })
 	}

@@ -41,10 +41,18 @@ export interface CameraState {
 	up: [number, number, number];
 }
 
-/** A comment marker the host asks the viewer to render on an element. */
+/** A comment marker the host asks the viewer to render. */
 export interface CommentMarker {
-	/** Stable element id (xeokit object / IFC GUID) the marker is pinned to. */
-	elementId: string;
+	/**
+	 * Stable identity of this marker, echoed back on click. Defaults to `elementId` when omitted.
+	 * Supply it whenever several markers can share one element, or when there is no element at all.
+	 */
+	id?: string;
+	/**
+	 * Stable element id (xeokit object / IFC GUID) the marker is pinned to. Omit for a marker
+	 * anchored purely in space, which requires `anchor`.
+	 */
+	elementId?: string;
 	/** Optional explicit world anchor; when omitted the viewer uses the element's AABB centre. */
 	anchor?: [number, number, number];
 }
@@ -138,11 +146,15 @@ export interface IsolateElementMessage {
 }
 
 /**
- * What a click in the 3D view does: pick an element (`select`), or place the two ends of a distance
- * measurement (`measure`). Only one is active at a time — the viewer suppresses element picking
- * while measuring.
+ * What a click in the 3D view does: pick an element (`select`), place the two ends of a distance
+ * measurement (`measure`), or anchor a note to the clicked element (`noteElement`) / to the exact
+ * clicked surface point (`notePoint`). Only one is active at a time — the viewer suppresses element
+ * picking and comment-marker clicks for every tool other than `select`.
+ *
+ * The note tools are one-shot in intent: the viewer reports `notePlaced` and stays armed, leaving
+ * the host to switch back to `select` once it has consumed the anchor.
  */
-export type ViewerTool = 'select' | 'measure';
+export type ViewerTool = 'select' | 'measure' | 'noteElement' | 'notePoint';
 
 /** Switch the active pointer tool. Leaving `measure` discards the measurement on screen. */
 export interface SetToolMessage {
@@ -210,7 +222,26 @@ export interface ElementSelectedMessage {
 
 export interface CommentMarkerClickedMessage {
 	type: 'commentMarkerClicked';
-	elementId: string;
+	/** Marker identity as supplied in `CommentMarker.id` (falls back to the element id). */
+	id: string;
+	/** The element the marker is pinned to; null for a marker anchored purely in space. */
+	elementId: string | null;
+	camera: CameraState;
+}
+
+/**
+ * The user placed a note anchor while `noteElement` / `notePoint` was the active tool. The host is
+ * expected to open its own create dialog and switch the tool back to `select`.
+ */
+export interface NotePlacedMessage {
+	type: 'notePlaced';
+	/** Which note tool produced this: anchored to the element, or to the exact clicked point. */
+	mode: 'element' | 'point';
+	/** The element under the click; null when the click missed all geometry. */
+	elementId: string | null;
+	label?: string;
+	/** The exact clicked surface point, in canonical coordinates. Only sent for `mode: 'point'`. */
+	worldPos?: [number, number, number];
 	camera: CameraState;
 }
 
@@ -231,6 +262,7 @@ export type ViewerToHostMessage =
 	| LoadErrorMessage
 	| ElementSelectedMessage
 	| CommentMarkerClickedMessage
+	| NotePlacedMessage
 	| CameraChangedMessage
 	| ZoomChangedMessage;
 

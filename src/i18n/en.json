@@ -2,5 +2,5 @@
 	"about.button": "License and source code",
 	"about.close": "Close",
 	"hint": "Left — rotate | Right — pan | Wheel — zoom | Ctrl+wheel — fine zoom",
-	"marker.showComment": "Show comment"
+	"marker.showComment": "Show note"
 }
