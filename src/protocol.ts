@@ -93,6 +93,15 @@ export interface SetCommentMarkersMessage {
 	markers: CommentMarker[];
 }
 
+/**
+ * Mark one comment marker as current; `null` clears it. Keyed on the marker, not its element:
+ * several markers can share an element, and a point-anchored one has no element at all.
+ */
+export interface SetSelectedMarkerMessage {
+	type: 'setSelectedMarker';
+	id: string | null;
+}
+
 export interface FocusElementMessage {
 	type: 'focusElement';
 	elementId: string;
@@ -179,6 +188,7 @@ export type HostToViewerMessage =
 	| InitMessage
 	| LoadModelMessage
 	| SetCommentMarkersMessage
+	| SetSelectedMarkerMessage
 	| FocusElementMessage
 	| SetCameraMessage
 	| SelectElementMessage

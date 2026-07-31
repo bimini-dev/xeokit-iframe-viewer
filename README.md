@@ -33,10 +33,10 @@ for that directive.
 
 ```bash
 pnpm install
-pnpm dev            # http://localhost:5273
+pnpm dev            # http://viewer.localhost:5273
 ```
 
-Open `http://localhost:5273/?dev` to enable a local file picker / drag-and-drop for `.xkt`/`.json`
+Open `http://viewer.localhost:5273/?dev` to enable a local file picker / drag-and-drop for `.xkt`/`.json`
 without a host — handy for testing the viewer in isolation.
 
 ```bash

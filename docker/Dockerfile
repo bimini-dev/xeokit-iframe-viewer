@@ -11,7 +11,7 @@ ENV VIEWER_COMMIT=$VIEWER_COMMIT
 RUN pnpm run build
 
 # Static serving — the viewer is a plain static bundle on its own origin.
-FROM nginx:1.27-alpine AS viewer
+FROM nginx:1.30-alpine AS viewer
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 

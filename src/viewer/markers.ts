@@ -15,6 +15,12 @@ export interface ResolvedMarker {
 	worldPos: [number, number, number];
 }
 
+const COMMENT_GLYPH: string =
+	'<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" ' +
+	'stroke-linejoin="round" aria-hidden="true">' +
+	'<path d="M9 3H15A6 6 0 0 1 21 9A6 6 0 0 1 15 15H13.5L5 21L9.5 15H9A6 6 0 0 1 3 9A6 6 0 0 1 9 3Z"/>' +
+	'</svg>';
+
 // `{{markerId}}` / `{{elementId}}` are filled per-annotation from `values` (AnnotationsPlugin uses
 // {{...}} templating). The marker id identifies the clicked pin; the element id is what the selected
 // state is toggled by, so selecting an element lights up every pin sitting on it.
@@ -22,7 +28,7 @@ function buildMarkerHtml(): string {
 	return (
 		'<div class="comment-marker" data-comment-id="{{markerId}}" data-comment-el="{{elementId}}" ' +
 		`title="${t('marker.showComment')}">` +
-		'<div class="comment-marker-dot"></div>' +
+		`<div class="comment-marker-dot">${COMMENT_GLYPH}</div>` +
 		'</div>'
 	);
 }
@@ -31,7 +37,7 @@ export class CommentMarkers {
 	private plugin: AnnotationsPlugin;
 	// annotationId → the marker's identity and the element it belongs to (null when purely spatial)
 	private byAnnotationId = new Map<string, { id: string; elementId: string | null }>();
-	private selectedElementId: string | null = null;
+	private selectedMarkerId: string | null = null;
 
 	constructor(viewer: Viewer, onMarkerClicked: (id: string, elementId: string | null) => void) {
 		this.plugin = new AnnotationsPlugin(viewer, {
@@ -65,16 +71,19 @@ export class CommentMarkers {
 		this.applySelection();
 	}
 
-	/** Colour the marker for `elementId` as selected (primary); pass null to clear. */
-	setSelected(elementId: string | null): void {
-		this.selectedElementId = elementId;
+	/**
+	 * Colour one marker as selected; pass null to clear. Keyed on the marker, not its element:
+	 * several markers can share an element, and a point-anchored one has no element at all.
+	 */
+	setSelected(markerId: string | null): void {
+		this.selectedMarkerId = markerId;
 		this.applySelection();
 	}
 
 	private applySelection(): void {
 		document.querySelectorAll<HTMLElement>('.comment-marker').forEach((el: HTMLElement) => {
 			const selected =
-				this.selectedElementId !== null && el.dataset.commentEl === this.selectedElementId;
+				this.selectedMarkerId !== null && el.dataset.commentId === this.selectedMarkerId;
 			el.classList.toggle('selected', selected);
 		});
 	}

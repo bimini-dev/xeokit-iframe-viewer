@@ -55,9 +55,27 @@ function serveLicense(): Plugin {
 	};
 }
 
+// The bundled entry chunk contains no `import`/`export` of its own, but xeokit inlines pako as a UMD
+// block that references `exports`/`module`. esbuild — which Vite runs over the finished chunk to hit
+// `build.target` — therefore classifies the chunk as CommonJS and wraps it in `__commonJS((exports,
+// module) => ...)`. Inside that scope pako's UMD sniff succeeds, so pako attaches itself to the
+// wrapper's `exports` instead of `window.pako`, which is where xeokit's XKT parsers look for it:
+// every XKT load then dies on "Cannot read properties of undefined (reading 'inflate')".
+// A single ESM statement is enough to make esbuild classify the chunk as a module and leave it alone.
+// Runs before `vite:esbuild-transpile` because user plugins are ordered ahead of Vite's post plugins.
+function markChunkAsEsm(): Plugin {
+	return {
+		name: 'mark-chunk-as-esm',
+		renderChunk(code): { code: string; map: null } {
+			// Appending keeps every existing mapping at its original offset, so the sourcemap stays valid.
+			return { code: `${code}\nexport {};\n`, map: null };
+		}
+	};
+}
+
 export default defineConfig({
 	base: './',
-	plugins: [serveLicense()],
+	plugins: [serveLicense(), markChunkAsEsm()],
 	define: {
 		__VIEWER_VERSION__: JSON.stringify(pkg.version),
 		__VIEWER_COMMIT__: JSON.stringify(viewerCommit)

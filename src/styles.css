@@ -16,6 +16,7 @@
 	--muted: #656d76;
 	--danger: #cf222e;
 	--primary: #0c30a3; /* oklch(0.379 0.188 264.5) */
+	--muted-foreground: #737373; /* oklch(0.556 0 0) */
 	--font: 'Consolas', 'JetBrains Mono', monospace;
 }
 html,
@@ -57,17 +58,22 @@ body {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 22px;
-	height: 22px;
+	width: 26px;
+	height: 26px;
 	cursor: pointer;
 	/* Center the dot on the projected anchor point (plugin sets left/top to that point). */
 	transform: translate(-50%, -50%);
 }
 .comment-marker-dot {
-	width: 16px;
-	height: 16px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
 	border-radius: 50%;
-	background: #8b949e;
+	background: var(--muted-foreground);
+	/* White rim over a dark hairline: the marker floats over arbitrary geometry, so it needs to
+	   hold up against both a pale wall and a dark beam. */
 	border: 2px solid #fff;
 	box-shadow:
 		0 0 0 1px rgba(0, 0, 0, 0.4),
@@ -75,6 +81,11 @@ body {
 	transition:
 		transform 0.1s,
 		background 0.1s;
+}
+.comment-marker-dot svg {
+	width: 10px;
+	height: 10px;
+	color: #fff;
 }
 .comment-marker.selected .comment-marker-dot {
 	background: var(--primary);

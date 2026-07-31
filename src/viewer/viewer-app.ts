@@ -366,6 +366,11 @@ export class ViewerApp {
 		this.markers.set(resolved);
 	}
 
+	/** Mark one comment marker as current; `null` clears it. */
+	setSelectedMarker(id: string | null): void {
+		this.markers.setSelected(id);
+	}
+
 	/**
 	 * Isolate the given elements (and their resolved geometry) by X-raying everything else to
 	 * barely-visible; pass `null`/empty to clear the isolation and reveal all objects again.
@@ -491,12 +496,14 @@ export class ViewerApp {
 			let sm: SceneModel;
 			try {
 				sm = this.xktLoader.load({ id: modelId, xkt: bytes, edges: false });
+				// Set before streaming starts, or a big model flashes Y-up until 'loaded' fires.
+				if (this.zUp) sm.matrix = ZMAT;
 			} catch (e) {
 				reject(e);
 				return;
 			}
 			sm.on('loaded', () => {
-				// Up-axis rotation is applied centrally in loadModel (after reading the un-rotated bounds).
+				// Up-axis rotation is applied on creation above, not here.
 				const entities = buildXktEntityList(this.viewer.metaScene, this.viewer.scene, sm.id, color);
 				this.models.push({
 					uid,
@@ -635,7 +642,6 @@ export class ViewerApp {
 		this.highlightedSceneIds = [];
 		this.selectedId = sceneId;
 		if (!sceneId) {
-			this.markers.setSelected(null);
 			this.cb.onElementSelected(null);
 			return;
 		}
@@ -654,7 +660,7 @@ export class ViewerApp {
 
 		const hit = this.index.get(sceneId);
 		const e = hit?.e;
-		this.markers.setSelected(e?.id ?? sceneId);
+		// Marker selection is not derived from the element — the host pushes it with setSelectedMarker.
 		// World anchor: the pick point when picking a leaf, else the centre of the highlighted bounds.
 		const wp =
 			worldPos ??

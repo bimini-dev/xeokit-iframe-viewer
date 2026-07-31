@@ -77,6 +77,9 @@ export class ViewerBridge {
 			case 'loadModel':
 				void this.app.loadModel(msg.bytes, msg.format, msg.name);
 				break;
+			case 'setSelectedMarker':
+				this.app.setSelectedMarker(msg.id);
+				break;
 			case 'setCommentMarkers':
 				this.app.setCommentMarkers(msg.markers);
 				break;
