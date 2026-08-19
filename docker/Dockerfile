@@ -1,6 +1,6 @@
 # Build context is this app's own root, so the image builds from a plain clone of this repository.
 FROM node:24.18-alpine AS build
-RUN npm install -g pnpm@latest
+RUN npm install -g pnpm@10.32.1
 WORKDIR /app
 COPY . ./
 RUN pnpm install --frozen-lockfile

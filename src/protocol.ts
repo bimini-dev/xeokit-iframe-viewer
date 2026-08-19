@@ -29,7 +29,7 @@ export const PROTOCOL_CHANNEL = 'xeokit-viewer' as const;
  * answer different questions — whether these two can talk, versus what is in this build. Neither
  * identifies a build exactly; the commit stamped into the about dialog does.
  */
-export const PROTOCOL_VERSION = 1 as const;
+export const PROTOCOL_VERSION = 2 as const;
 
 /** Supported model container formats the viewer can decode from raw bytes. */
 export type ModelFormat = 'xkt' | 'json';
@@ -102,6 +102,12 @@ export interface SetSelectedMarkerMessage {
 	id: string | null;
 }
 
+/** Mark one comment marker as transiently hovered; `null` clears the hover pulse. */
+export interface SetHoveredMarkerMessage {
+	type: 'setHoveredMarker';
+	id: string | null;
+}
+
 export interface FocusElementMessage {
 	type: 'focusElement';
 	elementId: string;
@@ -140,12 +146,31 @@ export interface ZoomMessage {
 	fine?: boolean;
 }
 
-/** Which world axis points up. Models are rotated to match; `y` is the default. */
-export type UpAxis = 'y' | 'z';
+/**
+ * How the model is presented. `2d` is the fixed view for drawings: the camera looks straight down the
+ * model's flat axis and rotation is disabled, leaving panning and zooming live. The two 3D modes
+ * orbit freely and differ only in which source axis is taken as up — models are rotated to match.
+ *
+ * The viewer chooses the mode when a model loads (`2d` for geometry it measures as flat, `3d-z-up`
+ * otherwise) and reports it with `modelLoaded`; the host may then switch it.
+ */
+export type ViewMode = '2d' | '3d-y-up' | '3d-z-up';
 
-export interface SetUpAxisMessage {
-	type: 'setUpAxis';
-	axis: UpAxis;
+/** What a viewer starts in, and what it falls back to for a model it does not measure as flat. */
+export const DEFAULT_VIEW_MODE: ViewMode = '3d-z-up';
+
+export interface SetViewModeMessage {
+	type: 'setViewMode';
+	mode: ViewMode;
+}
+
+/**
+ * Turn the fixed 2D view a quarter turn clockwise on screen, about the current target. A drawing
+ * carries no page orientation through the model file, so which way is up is a guess the viewer makes
+ * on load; this lets it be corrected. Ignored outside `2d`, where rotation is the camera's own job.
+ */
+export interface RotateViewMessage {
+	type: 'rotateView';
 }
 
 /** Isolate the given elements (X-ray everything else); `null` clears the isolation. */
@@ -189,12 +214,14 @@ export type HostToViewerMessage =
 	| LoadModelMessage
 	| SetCommentMarkersMessage
 	| SetSelectedMarkerMessage
+	| SetHoveredMarkerMessage
 	| FocusElementMessage
 	| SetCameraMessage
 	| SelectElementMessage
 	| ClearModelMessage
 	| ZoomMessage
-	| SetUpAxisMessage
+	| SetViewModeMessage
+	| RotateViewMessage
 	| IsolateElementMessage
 	| SetToolMessage
 	| SetModelUnitMessage;
@@ -212,6 +239,8 @@ export interface ModelLoadedMessage {
 	elements: ElementDescriptor[];
 	/** World-space AABB [xMin,yMin,zMin, xMax,yMax,zMax]. */
 	aabb: number[];
+	/** The mode the viewer chose for this model — `2d` when it measured the geometry as flat. */
+	viewMode: ViewMode;
 }
 
 export interface LoadErrorMessage {

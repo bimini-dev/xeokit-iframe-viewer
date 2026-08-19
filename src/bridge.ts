@@ -80,6 +80,9 @@ export class ViewerBridge {
 			case 'setSelectedMarker':
 				this.app.setSelectedMarker(msg.id);
 				break;
+			case 'setHoveredMarker':
+				this.app.setHoveredMarker(msg.id);
+				break;
 			case 'setCommentMarkers':
 				this.app.setCommentMarkers(msg.markers);
 				break;
@@ -98,8 +101,11 @@ export class ViewerBridge {
 			case 'zoom':
 				this.app.zoomStep(msg.direction, msg.fine);
 				break;
-			case 'setUpAxis':
-				this.app.setUpAxis(msg.axis);
+			case 'setViewMode':
+				this.app.setViewMode(msg.mode);
+				break;
+			case 'rotateView':
+				this.app.rotateView();
 				break;
 			case 'isolateElement':
 				this.app.isolateElements(msg.elementIds);

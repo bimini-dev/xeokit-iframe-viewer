@@ -8,6 +8,10 @@
        the reverse proxy (see docker/nginx.conf). The viewer holds no secrets/auth; the real trust
        boundary is the postMessage origin allowlist (?host) plus the embedding host app's own frame-src. -->
 		<title>xeokit Viewer</title>
+		<!-- Linked here rather than imported from main.ts so it is render-blocking. Imported, the CSS
+         arrives with the JS, and the first paint shows the chrome unstyled — the © button lands in
+         normal flow at the top-left and then jumps to its fixed corner. -->
+		<link rel="stylesheet" href="/src/styles.css" />
 	</head>
 	<body>
 		<canvas id="xeoCanvas"></canvas>
@@ -21,7 +25,8 @@
 			&#169;
 		</button>
 
-		<div class="hint" data-i18n="hint"></div>
+		<!-- Swapped for the "hintLocked" wording while the view lock is on (rotation is disabled then). -->
+		<div class="hint" id="navHint" data-i18n="hint"></div>
 
 		<!-- AGPL-3.0 "Appropriate Legal Notices" (§5d) + network source offer (§13). -->
 		<div id="aboutOverlay" class="about-overlay" hidden>

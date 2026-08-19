@@ -93,6 +93,23 @@ body {
 .comment-marker:hover .comment-marker-dot {
 	transform: scale(1.25);
 }
+.comment-marker.hovered:not(.selected) .comment-marker-dot {
+	animation: comment-marker-pulse 2s ease-in-out infinite;
+}
+@keyframes comment-marker-pulse {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.75);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.comment-marker.hovered:not(.selected) .comment-marker-dot {
+		animation: none;
+	}
+}
 
 /* About / license dialog (AGPL notices) */
 .about-fab {

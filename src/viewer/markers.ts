@@ -38,6 +38,7 @@ export class CommentMarkers {
 	// annotationId → the marker's identity and the element it belongs to (null when purely spatial)
 	private byAnnotationId = new Map<string, { id: string; elementId: string | null }>();
 	private selectedMarkerId: string | null = null;
+	private hoveredMarkerId: string | null = null;
 
 	constructor(viewer: Viewer, onMarkerClicked: (id: string, elementId: string | null) => void) {
 		this.plugin = new AnnotationsPlugin(viewer, {
@@ -68,7 +69,7 @@ export class CommentMarkers {
 			this.byAnnotationId.set(annotationId, { id: marker.id, elementId: marker.elementId });
 		}
 		// Recreated markers lost their selected class — reapply the current selection.
-		this.applySelection();
+		this.applyMarkerState();
 	}
 
 	/**
@@ -77,14 +78,23 @@ export class CommentMarkers {
 	 */
 	setSelected(markerId: string | null): void {
 		this.selectedMarkerId = markerId;
-		this.applySelection();
+		this.applyMarkerState();
 	}
 
-	private applySelection(): void {
+	/** Mark one comment marker as transiently hovered; `null` clears the hover pulse. */
+	setHovered(markerId: string | null): void {
+		this.hoveredMarkerId = markerId;
+		this.applyMarkerState();
+	}
+
+	private applyMarkerState(): void {
 		document.querySelectorAll<HTMLElement>('.comment-marker').forEach((el: HTMLElement) => {
 			const selected =
 				this.selectedMarkerId !== null && el.dataset.commentId === this.selectedMarkerId;
+			const hovered =
+				this.hoveredMarkerId !== null && el.dataset.commentId === this.hoveredMarkerId;
 			el.classList.toggle('selected', selected);
+			el.classList.toggle('hovered', hovered);
 		});
 	}
 

@@ -1,4 +1,4 @@
-import './styles.css';
+// styles.css is linked from index.html (render-blocking), not imported here — see the comment there.
 import { ViewerApp } from './viewer/viewer-app';
 import { ViewerBridge } from './bridge';
 import { applyStaticI18n } from './i18n';
@@ -7,14 +7,15 @@ import type { ModelFormat } from './protocol';
 applyStaticI18n();
 
 const canvas = document.getElementById('xeoCanvas') as HTMLCanvasElement;
+const hint = document.getElementById('navHint');
 
 const bridge: { ref?: ViewerBridge } = {};
 
 const app = new ViewerApp(
-	{ canvas },
+	{ canvas, hint },
 	{
-		onModelLoaded: (name, elements, aabb) =>
-			bridge.ref?.emit({ type: 'modelLoaded', name, elements, aabb }),
+		onModelLoaded: (name, elements, aabb, viewMode) =>
+			bridge.ref?.emit({ type: 'modelLoaded', name, elements, aabb, viewMode }),
 		onLoadError: (message) => bridge.ref?.emit({ type: 'loadError', message }),
 		onElementSelected: (elementId, label, worldPos, camera, properties) =>
 			bridge.ref?.emit({ type: 'elementSelected', elementId, label, worldPos, camera, properties }),
