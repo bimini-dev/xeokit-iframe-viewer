@@ -17,8 +17,15 @@ const app = new ViewerApp(
 		onModelLoaded: (name, elements, aabb, viewMode) =>
 			bridge.ref?.emit({ type: 'modelLoaded', name, elements, aabb, viewMode }),
 		onLoadError: (message) => bridge.ref?.emit({ type: 'loadError', message }),
-		onElementSelected: (elementId, label, worldPos, camera, properties) =>
-			bridge.ref?.emit({ type: 'elementSelected', elementId, label, worldPos, camera, properties }),
+		onElementSelected: (elementId, label, worldPos, camera, instanceGuid) =>
+			bridge.ref?.emit({
+				type: 'elementSelected',
+				elementId,
+				label,
+				worldPos,
+				camera,
+				instanceGuid
+			}),
 		onCommentMarkerClicked: (id, elementId, camera) =>
 			bridge.ref?.emit({ type: 'commentMarkerClicked', id, elementId, camera }),
 		onNotePlaced: (mode, elementId, label, worldPos, camera) =>

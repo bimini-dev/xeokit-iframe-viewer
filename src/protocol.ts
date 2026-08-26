@@ -29,7 +29,7 @@ export const PROTOCOL_CHANNEL = 'xeokit-viewer' as const;
  * answer different questions — whether these two can talk, versus what is in this build. Neither
  * identifies a build exactly; the commit stamped into the about dialog does.
  */
-export const PROTOCOL_VERSION = 2 as const;
+export const PROTOCOL_VERSION = 3 as const;
 
 /** Supported model container formats the viewer can decode from raw bytes. */
 export type ModelFormat = 'xkt' | 'json';
@@ -151,13 +151,13 @@ export interface ZoomMessage {
  * model's flat axis and rotation is disabled, leaving panning and zooming live. The two 3D modes
  * orbit freely and differ only in which source axis is taken as up — models are rotated to match.
  *
- * The viewer chooses the mode when a model loads (`2d` for geometry it measures as flat, `3d-z-up`
+ * The viewer chooses the mode when a model loads (`2d` for geometry it measures as flat, `3d-y-up`
  * otherwise) and reports it with `modelLoaded`; the host may then switch it.
  */
 export type ViewMode = '2d' | '3d-y-up' | '3d-z-up';
 
 /** What a viewer starts in, and what it falls back to for a model it does not measure as flat. */
-export const DEFAULT_VIEW_MODE: ViewMode = '3d-z-up';
+export const DEFAULT_VIEW_MODE: ViewMode = '3d-y-up';
 
 export interface SetViewModeMessage {
 	type: 'setViewMode';
@@ -255,8 +255,12 @@ export interface ElementSelectedMessage {
 	label?: string;
 	worldPos?: [number, number, number];
 	camera?: CameraState;
-	/** The element's properties (IFC/metadata), stringified key→value; absent when cleared. */
-	properties?: Record<string, string>;
+	/**
+	 * Value of the element's `InstanceGuid` metadata property — the host's key for looking the element
+	 * up in its own records. Absent when the selection was cleared, or when the model carries no such
+	 * property for this element. The rest of the model's properties stay inside the viewer.
+	 */
+	instanceGuid?: string;
 }
 
 export interface CommentMarkerClickedMessage {

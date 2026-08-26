@@ -62,6 +62,9 @@ const FLIGHT_SECONDS = 0.5;
 const MOUSE_LEFT = 1;
 const MOUSE_RIGHT = 2;
 
+// Metadata property naming the element's identity in the host's records; see readInstanceGuid.
+const INSTANCE_GUID_PROPERTY = 'InstanceGuid';
+
 // Z-up transform (column-major): source (x,y,z) → world (x, z, -y). See V7.
 const ZMAT = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1];
 const YMAT = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
@@ -90,7 +93,7 @@ export interface ViewerAppCallbacks {
 		label?: string,
 		worldPos?: [number, number, number],
 		camera?: CameraState,
-		properties?: Record<string, string>
+		instanceGuid?: string
 	) => void;
 	onCommentMarkerClicked: (id: string, elementId: string | null, camera: CameraState) => void;
 	onNotePlaced: (
@@ -1104,7 +1107,7 @@ export class ViewerApp {
 			// Anchor in canonical space, so the comment dot stays put across axis switches.
 			wp ? toCanonicalVec(wp, this.zUp) : undefined,
 			this.cameraState(),
-			e ? stringifyProperties(e.properties) : undefined
+			readInstanceGuid(e?.properties)
 		);
 	}
 
@@ -1213,11 +1216,18 @@ export class ViewerApp {
 
 // ── module-local helpers ───────────────────────────────────────────────────────
 
-function stringifyProperties(props?: Record<string, unknown>): Record<string, string> | undefined {
+/**
+ * The one metadata property that leaves the viewer: the host looks the element up by it in its own
+ * records. Matched case-insensitively — the property comes from whatever authored the model.
+ */
+function readInstanceGuid(props?: Record<string, unknown>): string | undefined {
 	if (!props) return undefined;
-	const out: Record<string, string> = {};
-	for (const [k, v] of Object.entries(props)) out[k] = String(v);
-	return out;
+	for (const [k, v] of Object.entries(props)) {
+		if (k.toLowerCase() !== INSTANCE_GUID_PROPERTY.toLowerCase()) continue;
+		const value = String(v ?? '').trim();
+		return value === '' ? undefined : value;
+	}
+	return undefined;
 }
 
 function aabbCenter(obj: { aabb?: number[] } | null | undefined): [number, number, number] | null {
