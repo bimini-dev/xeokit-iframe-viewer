@@ -50,10 +50,11 @@ const DEPTH_RANGE = 10000;
 const FLAT_AXIS_RATIO = 0.01;
 // Index of the world up-axis, and the fallback lock axis for a model that is not flat (top view).
 const WORLD_UP_AXIS = 1;
-// Screen-up for a plan view. A drawing carries no page orientation through XKT, so this is a
-// convention rather than a fact: our exports put the sheet's up along source +X (world +X under
-// ZMAT). A drawing from an exporter that disagrees opens rotated, and 2D mode cannot rotate it.
-const PLAN_SCREEN_UP: [number, number, number] = [1, 0, 0];
+// Screen-up for a plan view: world -Z. Our exports arrive in xeokit's orientation with the sheet
+// lying in the world XZ plane, face up, and its own +Y running along world -Z — so this puts a
+// drawing on screen as drawn, +Y up and +X right. A drawing carries no page orientation through XKT,
+// so it stays a convention rather than a fact; rotateView turns a sheet that came out differing.
+const PLAN_SCREEN_UP: [number, number, number] = [0, 0, -1];
 // The 3/4 iso direction the 3D modes frame from, pre-normalised (it never varies).
 const ISO_DIR = normalize3([1, 0.75, 1]);
 // Seconds for a deliberate camera move. A load cuts instead — see flyToFit.
@@ -61,6 +62,10 @@ const FLIGHT_SECONDS = 0.5;
 // MouseEvent.buttons bit flags (which buttons are held, as opposed to which one fired the event).
 const MOUSE_LEFT = 1;
 const MOUSE_RIGHT = 2;
+
+// Click tolerance for the 2D fallback pick, in pixels. Generous on purpose: a drawing's lines are a
+// pixel wide, so an exact hit test would be unusable with a mouse.
+const PICK_2D_TOLERANCE_PX = 10;
 
 // Metadata property naming the element's identity in the host's records; see readInstanceGuid.
 const INSTANCE_GUID_PROPERTY = 'InstanceGuid';
@@ -142,8 +147,8 @@ export class ViewerApp {
 	private seq = 0;
 	// How the model is presented, and the single source of truth for orientation and rotation locking.
 	// Re-derived on every load — a document opens 2D or 3D on its own geometry, so a mode chosen for
-	// the previous one never carries over. Defaults to Z-up: most of our CAD/IFC source data is Z-up,
-	// so a model loads upright without a manual switch.
+	// the previous one never carries over. Defaults to Y-up (DEFAULT_VIEW_MODE): our XKT exports
+	// already arrive in xeokit's orientation, so a model loads upright without a manual switch.
 	private mode: ViewMode = DEFAULT_VIEW_MODE;
 
 	/** Rotation disabled (the fixed 2D view). */
@@ -151,9 +156,9 @@ export class ViewerApp {
 		return this.mode === '2d';
 	}
 
-	/** Whether source data is Z-up, and so needs ZMAT to reach xeokit's Y-up world. 2D is Z-up too. */
+	/** Whether the model needs ZMAT to reach xeokit's Y-up world. */
 	private get zUp(): boolean {
-		return this.mode !== '3d-y-up';
+		return isZUpMode(this.mode);
 	}
 	// Magnification shown in the host toolbar is derived from the live camera distance: the eye→look
 	// distance at the fit view is 100%, and percent = fitDistance / currentDistance * 100. This keeps
@@ -226,7 +231,9 @@ export class ViewerApp {
 			this.cb.onCommentMarkerClicked(id, elementId, this.cameraState());
 		});
 		this.measure = new DistanceMeasure(this.viewer, els.canvas);
-		this.hover = new HoverHighlight(this.viewer, els.canvas);
+		this.hover = new HoverHighlight(this.viewer, els.canvas, (coords) =>
+			this.viewLocked ? this.pick2D(coords).sceneId : null
+		);
 
 		this.initCanvas();
 		this.initPan();
@@ -255,7 +262,7 @@ export class ViewerApp {
 			this.applyUpAxis();
 			// A flat model is a 2D drawing: open it face-on and locked, so a stray drag cannot tip it
 			// edge-on. Flatness survives the up-axis rotation (a permutation), so measuring it here holds
-			// whichever mode we came in with — but adopting `2d` anchors to Z-up, which can re-orient.
+			// whichever mode we came in with — but adopting `2d` anchors to Y-up, which can re-orient.
 			const flat = detectFlatAxis(this.viewer.scene.aabb);
 			// A turn corrects one drawing's sheet orientation; it should not follow the next document.
 			this.planTurns = 0;
@@ -578,14 +585,16 @@ export class ViewerApp {
 	 * Switch how the model is presented: the fixed 2D view, or 3D orbiting with Y or Z up. Rotates the
 	 * loaded models when the up-axis changes, and re-frames for the new mode either way.
 	 *
-	 * `2d` is anchored to Z-up, and has to be: the two orientations put different source axes on
-	 * screen-up (Z-up leaves the flat axis as world Y, whose screen-up is +X; Y-up leaves it as world Z,
-	 * whose screen-up is world +Y), so without anchoring, the same drawing would face two different ways
-	 * depending on which 3D mode preceded it.
+	 * `2d` is anchored to Y-up, and has to be anchored to something: the two orientations put different
+	 * axes on screen-up, so without a fixed choice the same drawing would face two different ways
+	 * depending on which 3D mode preceded it. Y-up is the correct anchor because our XKT exports already
+	 * arrive in xeokit's native orientation, a drawing laid out in the file's XZ plane, face up.
+	 * Anchoring to Z-up applied ZMAT on top of that: the sheet ended up facing away with the camera
+	 * behind it, so a drawing opened mirrored and turned.
 	 */
 	setViewMode(mode: ViewMode): void {
 		if (mode === this.mode) return;
-		const reorients = this.zUp !== (mode !== '3d-y-up');
+		const reorients = this.zUp !== isZUpMode(mode);
 		this.applyMode(mode);
 		if (reorients) {
 			this.applyUpAxis();
@@ -693,12 +702,8 @@ export class ViewerApp {
 	 * entirely on the size of the model's coordinates.
 	 */
 	private panByPixels(dx: number, dy: number): void {
-		const height = this.els.canvas.clientHeight;
-		if (height <= 0) return;
-		const { tanHalfFov } = this.viewportFov();
-		// World units per pixel at the target plane — the same in both axes, since aspect scales the
-		// visible width and the pixel width together.
-		const perPixel = (2 * this.cameraDistance() * tanHalfFov) / height;
+		const perPixel = this.worldPerPixel();
+		if (perPixel <= 0) return;
 		const { right, up } = this.viewAxes();
 		// Content follows the pointer, so the camera travels against it.
 		const alongRight = -dx * perPixel;
@@ -796,6 +801,17 @@ export class ViewerApp {
 		const forward = normalize3([look[0] - eye[0], look[1] - eye[1], look[2] - eye[2]]);
 		const right = normalize3(cross3(forward, camera.up));
 		return { right, up: cross3(right, forward) };
+	}
+
+	/**
+	 * World units per pixel at the camera's target plane — the same in both axes, since aspect scales
+	 * the visible width and the pixel width together. 0 when the canvas has no height yet.
+	 */
+	private worldPerPixel(): number {
+		const height = this.els.canvas.clientHeight;
+		if (height <= 0) return 0;
+		const { tanHalfFov } = this.viewportFov();
+		return (2 * this.cameraDistance() * tanHalfFov) / height;
 	}
 
 	/**
@@ -1030,7 +1046,9 @@ export class ViewerApp {
 				this.select(String(hit.entity.id), hit.worldPos);
 				return;
 			}
-			this.select(this.pick2DLine(coords, 10));
+			// Only the locked view falls back: in 3D a miss really is empty space, and deselects.
+			const fallback = this.viewLocked ? this.pick2D(coords) : null;
+			this.select(fallback?.sceneId ?? null, fallback?.worldPos);
 		});
 	}
 
@@ -1043,11 +1061,18 @@ export class ViewerApp {
 		// `pickSurface` is what makes xeokit compute the ray/triangle intersection; without it the pick
 		// result carries no worldPos at all and the anchor would silently collapse to the AABB centre.
 		const hit = this.viewer.scene.pick({ canvasPos: coords, pickSurface: wantPoint });
-		if (!hit?.entity) return;
-		const worldPos = wantPoint ? hit.worldPos : null;
-		if (wantPoint && !worldPos) return;
-		const sceneId = String(hit.entity.id);
-		const e = this.index.get(sceneId)?.e;
+		let sceneId: string | null = hit?.entity ? String(hit.entity.id) : null;
+		let worldPos: number[] | undefined = (wantPoint ? hit?.worldPos : undefined) ?? undefined;
+		// A drawing's lines are invisible to scene.pick, so the locked view resolves the click itself.
+		if (this.viewLocked && (!sceneId || (wantPoint && !worldPos))) {
+			const fallback = this.pick2D(coords);
+			sceneId ??= fallback.sceneId;
+			worldPos ??= fallback.worldPos;
+		}
+		// A point anchor needs only the point, and renders as a bare spatial marker when the click
+		// landed on nothing in particular. An element anchor has nothing to attach to without one.
+		if (wantPoint ? !worldPos : !sceneId) return;
+		const e = sceneId ? this.index.get(sceneId)?.e : undefined;
 		this.cb.onNotePlaced(
 			wantPoint ? 'point' : 'element',
 			e?.id ?? null,
@@ -1182,8 +1207,62 @@ export class ViewerApp {
 		);
 	}
 
-	// ── 2D CPU line pick (ported from V7) ────────────────────────────────────────
+	// ── 2D fallback pick ─────────────────────────────────────────────────────────
 
+	/**
+	 * Element and world point under a canvas position, for drawings xeokit cannot pick. Its VBO layers
+	 * give line primitives neither a pick colour nor readable geometry (the `primitive !== "lines"`
+	 * gates in VBOLayer), so `scene.pick` never reports a hit on one — and a 2D drawing is all lines.
+	 *
+	 * The point is exact: under the 2D lock the camera's target plane *is* the drawing's plane, so the
+	 * click unprojects straight onto it. The element is a best effort — without the geometry, the
+	 * closest we get is the bounding box the point landed in.
+	 */
+	private pick2D(coords: number[]): {
+		sceneId: string | null;
+		worldPos: [number, number, number] | undefined;
+	} {
+		const worldPos = this.pointerTarget(coords);
+		const line = this.pick2DLine(coords, PICK_2D_TOLERANCE_PX);
+		return { sceneId: line ?? (worldPos ? this.pickAabbAt(worldPos) : null), worldPos };
+	}
+
+	/**
+	 * Smallest visible entity whose world AABB contains `worldPos`, padded by the click tolerance.
+	 * Smallest wins so a part nested inside a larger assembly stays reachable — a click inside both
+	 * would otherwise always land on the outer one.
+	 */
+	private pickAabbAt(worldPos: number[]): string | null {
+		const pad = this.worldPerPixel() * PICK_2D_TOLERANCE_PX;
+		let best: string | null = null;
+		let bestSize = Infinity;
+		for (const m of this.models) {
+			if (m._visible === false) continue;
+			for (const e of m.entities) {
+				if (!e.hasGeometry) continue;
+				const o = this.viewer.scene.objects[e._sceneId];
+				const a = o?.aabb;
+				if (!o?.visible || !a) continue;
+				let inside = true;
+				for (let axis = 0; axis < 3; axis++) {
+					if (worldPos[axis] < a[axis] - pad || worldPos[axis] > a[axis + 3] + pad) {
+						inside = false;
+						break;
+					}
+				}
+				if (!inside) continue;
+				// Summed extents rather than volume: a drawing's boxes are flat, so every volume is 0.
+				const size = a[3] - a[0] + (a[4] - a[1]) + (a[5] - a[2]);
+				if (size < bestSize) {
+					bestSize = size;
+					best = e._sceneId;
+				}
+			}
+		}
+		return best;
+	}
+
+	/** Nearest line segment within `tol` pixels. Needs `pickLines`, which no loader fills in yet. */
 	private pick2DLine(coords: number[], tol: number): string | null {
 		const canvas = this.els.canvas;
 		const W = canvas.clientWidth,
@@ -1215,6 +1294,14 @@ export class ViewerApp {
 }
 
 // ── module-local helpers ───────────────────────────────────────────────────────
+
+/**
+ * Whether a mode presents the model as Z-up. Only the explicit Z-up orbit does: the XKT we are given
+ * is already Y-up, and `2d` is anchored to that same orientation (see setViewMode).
+ */
+function isZUpMode(mode: ViewMode): boolean {
+	return mode === '3d-z-up';
+}
 
 /**
  * The one metadata property that leaves the viewer: the host looks the element up by it in its own

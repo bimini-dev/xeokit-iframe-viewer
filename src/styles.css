@@ -61,8 +61,11 @@ body {
 	width: 26px;
 	height: 26px;
 	cursor: pointer;
-	/* Center the dot on the projected anchor point (plugin sets left/top to that point). */
-	transform: translate(-50%, -50%);
+	/* Centre the dot on the projected anchor. AnnotationsPlugin does not put left/top on the anchor:
+	   it subtracts a hardcoded 12px first, to centre a marker it assumes is 24x24 (Annotation.js,
+	   _updateWithCurWidths). Undo that before centring, or the two offsets stack and the pin sits
+	   12px up and to the left of the point that was clicked. */
+	transform: translate(calc(12px - 50%), calc(12px - 50%));
 }
 .comment-marker-dot {
 	display: flex;

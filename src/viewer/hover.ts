@@ -13,9 +13,14 @@ export class HoverHighlight {
 	private hoveredId: string | null = null;
 	private active = false;
 
+	/**
+	 * @param resolveMissed Element under the pointer when `scene.pick` reports nothing — the 2D
+	 * fallback, since xeokit cannot pick a drawing's line geometry (see ViewerApp.pick2D).
+	 */
 	constructor(
 		private viewer: Viewer,
-		canvas: HTMLCanvasElement
+		canvas: HTMLCanvasElement,
+		private resolveMissed: (coords: number[]) => string | null
 	) {
 		viewer.scene.selectedMaterial.fill = true;
 		viewer.scene.selectedMaterial.fillColor = HOVER_COLOR;
@@ -27,7 +32,7 @@ export class HoverHighlight {
 		viewer.scene.input.on('mousemove', (coords: number[]) => {
 			if (!this.active) return;
 			const hit = viewer.scene.pick({ canvasPos: coords });
-			this.setHovered(hit?.entity ? String(hit.entity.id) : null);
+			this.setHovered(hit?.entity ? String(hit.entity.id) : this.resolveMissed(coords));
 		});
 		// xeokit's input bus does not expose a typed 'mouseleave', so the canvas's own DOM event is used
 		// instead (the same source measure.ts drives its own listeners from).
