@@ -16,7 +16,7 @@
 	"type": "module",
 	"packageManager": "pnpm@10.32.1",
 	"engines": {
-		"node": "24.18.0"
+		"node": "26.9.0"
 	},
 	"scripts": {
 		"dev": "vite",
@@ -29,18 +29,18 @@
 		"format": "prettier --write ."
 	},
 	"dependencies": {
-		"@xeokit/xeokit-sdk": "^2.6.74"
+		"@xeokit/xeokit-sdk": "^2.6.114"
 	},
 	"devDependencies": {
-		"@eslint/compat": "^2.0.2",
-		"@eslint/js": "^9.39.2",
-		"@types/node": "^26.1.1",
-		"eslint": "^9.39.2",
+		"@eslint/compat": "^2.1.1",
+		"@eslint/js": "^9.39.5",
+		"@types/node": "^26.6.1",
+		"eslint": "^9.39.5",
 		"eslint-config-prettier": "^10.1.8",
-		"globals": "^17.3.0",
-		"prettier": "^3.8.1",
-		"typescript": "^5.6.3",
-		"typescript-eslint": "^8.54.0",
-		"vite": "^7.0.0"
+		"globals": "^17.12.0",
+		"prettier": "^3.9.8",
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.70.0",
+		"vite": "^7.3.6"
 	}
 }
