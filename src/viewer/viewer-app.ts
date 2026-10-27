@@ -14,6 +14,7 @@ import type {
 	CameraState,
 	CommentMarker,
 	ElementDescriptor,
+	FederationModel,
 	ModelFormat,
 	ModelUnit,
 	ViewMode,
@@ -256,36 +257,69 @@ export class ViewerApp {
 			this.clearModel();
 			if (format === 'xkt') await this.loadXkt(bytes, name);
 			else await this.loadJson(bytes, name);
-
-			this.reindex();
-			// Rotate the model into the current up-axis, then fit it. The fit view defines 100% zoom.
-			this.applyUpAxis();
-			// A flat model is a 2D drawing: open it face-on and locked, so a stray drag cannot tip it
-			// edge-on. Flatness survives the up-axis rotation (a permutation), so measuring it here holds
-			// whichever mode we came in with — but adopting `2d` anchors to Y-up, which can re-orient.
-			const flat = detectFlatAxis(this.viewer.scene.aabb);
-			// A turn corrects one drawing's sheet orientation; it should not follow the next document.
-			this.planTurns = 0;
-			const wasZUp = this.zUp;
-			this.applyMode(flat >= 0 ? '2d' : this.zUp ? '3d-z-up' : '3d-y-up');
-			// Only when the axis actually flipped: assigning `matrix` re-transforms every entity's AABB
-			// even when the value is unchanged.
-			if (this.zUp !== wasZUp) this.applyUpAxis();
-			// Cut straight to the fit view: the model appears already framed, rather than swinging in
-			// from the camera's start pose.
-			this.reframe(false);
-			// Draw the framed view into the canvas before uncovering it. The buffer still holds the last
-			// frame drawn while streaming — at the old camera — and 'loaded' can fire from inside the
-			// viewer's own tick, so the redraw for this frame may already be behind us. Unforced: the
-			// forced form also drains xeokit's deferred-task queue with no time budget, which right after
-			// a large model streams in is an unbounded stall.
-			this.viewer.scene.render();
-			this.cb.onModelLoaded(name, this.elementDescriptors(), this.viewer.scene.aabb, this.mode);
+			this.presentScene(name);
 		} catch (e: unknown) {
 			this.cb.onLoadError(e instanceof Error ? e.message : String(e));
 		} finally {
 			this.els.canvas.style.visibility = '';
 		}
+	}
+
+	/**
+	 * Replace the scene with several models that already share one world coordinate system, then frame
+	 * the combined scene once. Object ids are prefixed per model so the same id in two files cannot
+	 * collide. A failure drops any model that did load, so the host never sees a partial federation.
+	 */
+	async loadFederation(models: FederationModel[]): Promise<void> {
+		this.els.canvas.style.visibility = 'hidden';
+		try {
+			this.clearModel();
+			for (const model of models) {
+				if (model.format === 'xkt') {
+					await this.loadXkt(model.bytes, model.name, {
+						hostModelId: model.modelId,
+						globalizeObjectIds: true
+					});
+				} else {
+					await this.loadJson(model.bytes, model.name, model.modelId);
+				}
+			}
+			const name = models.map((model) => model.name).join(', ');
+			this.presentScene(name);
+		} catch (e: unknown) {
+			this.clearModel();
+			this.cb.onLoadError(e instanceof Error ? e.message : String(e));
+		} finally {
+			this.els.canvas.style.visibility = '';
+		}
+	}
+
+	/** Index, orient and frame whatever is currently loaded, then report it to the host. */
+	private presentScene(name: string): void {
+		this.reindex();
+		// Rotate the model into the current up-axis, then fit it. The fit view defines 100% zoom.
+		this.applyUpAxis();
+		// A flat model is a 2D drawing: open it face-on and locked, so a stray drag cannot tip it
+		// edge-on. Flatness survives the up-axis rotation (a permutation), so measuring it here holds
+		// whichever mode we came in with — but adopting `2d` anchors to Y-up, which can re-orient.
+		const flat = detectFlatAxis(this.viewer.scene.aabb);
+		// A turn corrects one drawing's sheet orientation; it should not follow the next document.
+		this.planTurns = 0;
+		const wasZUp = this.zUp;
+		this.applyMode(flat >= 0 ? '2d' : this.zUp ? '3d-z-up' : '3d-y-up');
+		// Only when the axis actually flipped: assigning `matrix` re-transforms every entity's AABB
+		// even when the value is unchanged.
+		if (this.zUp !== wasZUp) this.applyUpAxis();
+		// Cut straight to the fit view: the model appears already framed, rather than swinging in
+		// from the camera's start pose.
+		this.reframe(false);
+		// Draw the framed view into the canvas before uncovering it. The buffer still holds the last
+		// frame drawn while streaming — at the old camera — and 'loaded' can fire from inside the
+		// viewer's own tick, so the redraw for this frame may already be behind us. Unforced: the
+		// forced form also drains xeokit's deferred-task queue with no time budget, which right after
+		// a large model streams in is an unbounded stall.
+		this.viewer.scene.render();
+		this.cb.onModelLoaded(name, this.elementDescriptors(), this.viewer.scene.aabb, this.mode);
 	}
 
 	clearModel(): void {
@@ -533,15 +567,19 @@ export class ViewerApp {
 	 */
 	isolateElements(elementIds: string[] | null): void {
 		const scene = this.viewer.scene;
+		const visibleIds = this.visibleObjectIds();
 		const keep = elementIds && elementIds.length ? this.resolveSceneObjects(elementIds) : [];
-		if (!keep.length) {
+		const visible = new Set(visibleIds);
+		const keepVisible = keep.filter((id) => visible.has(id));
+		if (!keepVisible.length) {
 			// Nothing to keep (clear request, or a group with no resolvable geometry) — reveal all
 			// rather than X-raying the whole scene.
 			if (scene.xrayedObjectIds.length) scene.setObjectsXRayed(scene.xrayedObjectIds, false);
 			return;
 		}
-		scene.setObjectsXRayed(scene.objectIds, true);
-		scene.setObjectsXRayed(keep, false);
+		// Hidden models stay hidden; X-ray only what the host currently has switched on.
+		scene.setObjectsXRayed(visibleIds, true);
+		scene.setObjectsXRayed(keepVisible, false);
 	}
 
 	/**
@@ -567,7 +605,13 @@ export class ViewerApp {
 	}
 
 	showAll(): void {
-		Object.values(this.viewer.scene.objects).forEach((o) => (o.visible = true));
+		for (const model of this.models) {
+			if (model._visible === false) continue;
+			for (const entity of model.entities) {
+				const object = this.viewer.scene.objects[entity._sceneId];
+				if (object) object.visible = true;
+			}
+		}
 	}
 
 	fitAll(): void {
@@ -634,15 +678,37 @@ export class ViewerApp {
 	 * rotation is re-applied, and a stale copy would frame a drawing edge-on.
 	 */
 	private lockAxis(): number {
-		const flat = detectFlatAxis(this.viewer.scene.aabb);
+		const flat = detectFlatAxis(this.frameAabb());
 		return flat >= 0 ? flat : WORLD_UP_AXIS;
 	}
 
-	/** Re-frame the whole model for the current mode, re-establishing the 100% zoom baseline. */
+	/** Re-frame the visible models for the current mode, re-establishing the 100% zoom baseline. */
 	private reframe(animate: boolean = true): void {
-		if (!this.models.length) return;
+		if (!this.models.some((model) => model._visible !== false)) return;
 		this.fitReady = false;
-		this.flyToFit(this.viewer.scene.aabb, animate);
+		this.flyToFit(this.frameAabb(), animate);
+	}
+
+	/**
+	 * Bounds to frame. With every model visible this is the scene bounds, so a single document frames
+	 * exactly as before. A hidden federation member is left out.
+	 */
+	private frameAabb(): number[] {
+		if (this.models.every((model) => model._visible !== false)) return this.viewer.scene.aabb;
+		const ids = this.visibleObjectIds();
+		return ids.length ? this.viewer.scene.getAABB(ids) : this.viewer.scene.aabb;
+	}
+
+	/** Scene-object ids of models the host has not switched off. */
+	private visibleObjectIds(): string[] {
+		const ids: string[] = [];
+		for (const model of this.models) {
+			if (model._visible === false) continue;
+			for (const entity of model.entities) {
+				if (this.viewer.scene.objects[entity._sceneId]) ids.push(entity._sceneId);
+			}
+		}
+		return ids;
 	}
 
 	/** Eye direction and screen-up for a view looking straight down the given world axis. */
@@ -916,14 +982,15 @@ export class ViewerApp {
 
 	// ── Loading ─────────────────────────────────────────────────────────────────
 
-	private async loadJson(bytes: ArrayBuffer, name: string): Promise<void> {
+	private async loadJson(bytes: ArrayBuffer, name: string, hostModelId?: string): Promise<void> {
 		const data = JSON.parse(new TextDecoder().decode(bytes)) as ModelData;
 		const uid = ++this.seq;
 		const color = this.nextColor();
 		const built = buildJsonModel(this.viewer.scene, data, uid, color);
-		// Up-axis rotation is applied centrally in loadModel (after reading the un-rotated bounds).
+		// Up-axis rotation is applied centrally in presentScene (after reading the un-rotated bounds).
 		this.models.push({
 			uid,
+			hostModelId,
 			source: data.source || name,
 			sm: built.sm,
 			entities: built.entities,
@@ -934,14 +1001,25 @@ export class ViewerApp {
 		});
 	}
 
-	private loadXkt(bytes: ArrayBuffer, name: string): Promise<void> {
+	private loadXkt(
+		bytes: ArrayBuffer,
+		name: string,
+		options?: { hostModelId?: string; globalizeObjectIds?: boolean }
+	): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const uid = ++this.seq;
 			const color = this.nextColor();
-			const modelId = 'm' + uid;
+			// The host id is the xeokit model id in a federation, so globalizeObjectIds prefixes each
+			// object with that id (`modelId#objectId`) and two files cannot share an element id.
+			const modelId = options?.hostModelId ?? 'm' + uid;
 			let sm: SceneModel;
 			try {
-				sm = this.xktLoader.load({ id: modelId, xkt: bytes, edges: false });
+				sm = this.xktLoader.load({
+					id: modelId,
+					xkt: bytes,
+					edges: false,
+					globalizeObjectIds: options?.globalizeObjectIds === true
+				});
 				// Set before streaming starts, or a big model flashes Y-up until 'loaded' fires.
 				if (this.zUp) sm.matrix = ZMAT;
 			} catch (e) {
@@ -953,6 +1031,7 @@ export class ViewerApp {
 				const entities = buildXktEntityList(this.viewer.metaScene, this.viewer.scene, sm.id, color);
 				this.models.push({
 					uid,
+					hostModelId: options?.hostModelId,
 					source: name,
 					sm,
 					entities,
@@ -993,7 +1072,8 @@ export class ViewerApp {
 					label: e.label,
 					parentId: e.parentId,
 					hasGeometry: e.hasGeometry,
-					type: e.type
+					type: e.type,
+					...(m.hostModelId ? { modelId: m.hostModelId } : {})
 				});
 		return out;
 	}
@@ -1006,6 +1086,25 @@ export class ViewerApp {
 		m.sm.destroy();
 		this.models.splice(i, 1);
 		this.reindex();
+	}
+
+	/**
+	 * Show or hide federation models by the id the host loaded them with. A selection or measurement
+	 * that lived in a model just hidden is dropped — it would otherwise point at invisible geometry.
+	 */
+	setModelVisibility(modelIds: string[], visible: boolean): void {
+		const targets = new Set(modelIds);
+		for (const model of this.models) {
+			if (!model.hostModelId || !targets.has(model.hostModelId)) continue;
+			this.setModelVisible(model.uid, visible);
+		}
+		if (!visible && this.selectedId) {
+			const hit = this.index.get(this.selectedId);
+			if (hit && hit.m._visible === false) {
+				this.select(null);
+				this.measure.clear();
+			}
+		}
 	}
 
 	private setModelVisible(uid: number, vis: boolean): void {

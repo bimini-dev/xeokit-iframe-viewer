@@ -77,6 +77,12 @@ export class ViewerBridge {
 			case 'loadModel':
 				void this.app.loadModel(msg.bytes, msg.format, msg.name);
 				break;
+			case 'loadFederation':
+				void this.app.loadFederation(msg.models);
+				break;
+			case 'setModelVisibility':
+				this.app.setModelVisibility(msg.modelIds, msg.visible);
+				break;
 			case 'setSelectedMarker':
 				this.app.setSelectedMarker(msg.id);
 				break;

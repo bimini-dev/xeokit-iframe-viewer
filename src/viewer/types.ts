@@ -29,6 +29,8 @@ export interface PickLine {
 
 export interface ModelRecord {
 	uid: number;
+	/** Host identity when this model was loaded as part of a federation. Absent for a single-model load. */
+	hostModelId?: string;
 	source: string;
 	// xeokit model handle. XKTLoaderPlugin returns a VBOSceneModel (a SceneModel subclass), so
 	// SceneModel covers both the JSON (SceneModel) and XKT (VBOSceneModel) load paths.

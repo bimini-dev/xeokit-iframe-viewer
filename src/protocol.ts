@@ -67,6 +67,11 @@ export interface ElementDescriptor {
 	hasGeometry?: boolean;
 	/** The element's type (often an IFC product type, e.g. `IfcFooting`); absent when unknown. */
 	type?: string;
+	/**
+	 * Host identity of the model this element belongs to. Present only when the scene was loaded as a
+	 * federation (`loadFederation`); a single `loadModel` leaves it unset.
+	 */
+	modelId?: string;
 }
 
 // ── Host → Viewer ────────────────────────────────────────────────────────────
@@ -86,6 +91,36 @@ export interface LoadModelMessage {
 	 * for passing a COPY (e.g. `bytes.slice(0)`) so its own cached buffer is not detached.
 	 */
 	bytes: ArrayBuffer;
+}
+
+/** One model inside a `loadFederation` payload. */
+export interface FederationModel {
+	/** Host identity of this model. Echoed on each of its elements as `ElementDescriptor.modelId`. */
+	modelId: string;
+	name: string;
+	format: ModelFormat;
+	/**
+	 * The model bytes. Sent as a transferable so it arrives zero-copy. The host is responsible
+	 * for passing a COPY (e.g. `bytes.slice(0)`) so its own cached buffer is not detached.
+	 */
+	bytes: ArrayBuffer;
+}
+
+/**
+ * Replace the scene with several models that share one world coordinate system. The viewer frames
+ * the combined scene once, after every model has loaded, and answers with a single `modelLoaded`
+ * (or `loadError` if any model fails).
+ */
+export interface LoadFederationMessage {
+	type: 'loadFederation';
+	models: FederationModel[];
+}
+
+/** Show or hide whole models previously loaded by `loadFederation`. */
+export interface SetModelVisibilityMessage {
+	type: 'setModelVisibility';
+	modelIds: string[];
+	visible: boolean;
 }
 
 export interface SetCommentMarkersMessage {
@@ -212,6 +247,8 @@ export interface SetModelUnitMessage {
 export type HostToViewerMessage =
 	| InitMessage
 	| LoadModelMessage
+	| LoadFederationMessage
+	| SetModelVisibilityMessage
 	| SetCommentMarkersMessage
 	| SetSelectedMarkerMessage
 	| SetHoveredMarkerMessage
