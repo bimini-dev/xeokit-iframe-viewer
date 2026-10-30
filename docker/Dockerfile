@@ -1,5 +1,5 @@
 # Build context is this app's own root, so the image builds from a plain clone of this repository.
-FROM node:26.13.0-alpine AS build
+FROM node:26.9.0-alpine AS build
 RUN npm install -g pnpm@10.32.1
 WORKDIR /app
 COPY . ./
@@ -11,7 +11,7 @@ ENV VIEWER_COMMIT=$VIEWER_COMMIT
 RUN pnpm run build
 
 # Static serving — the viewer is a plain static bundle on its own origin.
-FROM nginx:1.31-alpine-slim AS viewer
+FROM nginx:1.30-alpine AS viewer
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 
