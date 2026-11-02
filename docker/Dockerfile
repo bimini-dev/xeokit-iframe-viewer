@@ -11,7 +11,6 @@ ENV VIEWER_COMMIT=$VIEWER_COMMIT
 RUN pnpm run build
 
 # Static serving — the viewer is a plain static bundle on its own origin.
-# Temporary switch from alpine to alpine-slim due to critical CVEs
 FROM nginx:1.31-alpine-slim AS viewer
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
