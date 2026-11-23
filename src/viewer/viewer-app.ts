@@ -14,6 +14,7 @@ import type {
 	CameraState,
 	CommentMarker,
 	ElementDescriptor,
+	ElementProperty,
 	FederationModel,
 	ModelFormat,
 	ModelUnit,
@@ -23,7 +24,7 @@ import type {
 } from '../protocol';
 import { t } from '../i18n';
 import { HoverHighlight } from './hover';
-import { buildJsonModel, buildXktEntityList } from './loaders';
+import { buildJsonModel, buildXktEntityList, readXktPropertyIdentifiers } from './loaders';
 import { CommentMarkers, type ResolvedMarker } from './markers';
 import { DistanceMeasure } from './measure';
 import type { EntityRecord, ModelData, ModelRecord } from './types';
@@ -91,7 +92,8 @@ export interface ViewerAppCallbacks {
 		name: string,
 		elements: ElementDescriptor[],
 		aabb: number[],
-		mode: ViewMode
+		mode: ViewMode,
+		includeElementProperties: boolean
 	) => void;
 	onLoadError: (message: string) => void;
 	onElementSelected: (
@@ -244,7 +246,13 @@ export class ViewerApp {
 
 	// ── Public API (called by the bridge) ──────────────────────────────────────
 
-	async loadModel(bytes: ArrayBuffer, format: ModelFormat, name: string): Promise<void> {
+	async loadModel(
+		bytes: ArrayBuffer,
+		format: ModelFormat,
+		name: string,
+		options: { includeElementProperties?: boolean; propertyIdentifierField?: string } = {}
+	): Promise<void> {
+		const { includeElementProperties = false, propertyIdentifierField } = options;
 		// A model paints progressively as it streams, under whatever camera is current — so it would show
 		// up at the wrong size and jump once framing arrives. Hold the canvas back until it is framed.
 		// `visibility` rather than `display`, so the canvas keeps its layout box and the ResizeObserver
@@ -255,9 +263,12 @@ export class ViewerApp {
 			// previous scene. Without this, a re-sent loadModel (e.g. the host refetching the file and
 			// handing us a new `src` buffer) would stack a duplicate model in the tree.
 			this.clearModel();
-			if (format === 'xkt') await this.loadXkt(bytes, name);
-			else await this.loadJson(bytes, name);
-			this.presentScene(name);
+			if (format === 'xkt') {
+				await this.loadXkt(bytes, name, {
+					propertyIdentifierField: includeElementProperties ? propertyIdentifierField : undefined
+				});
+			} else await this.loadJson(bytes, name);
+			this.presentScene(name, includeElementProperties);
 		} catch (e: unknown) {
 			this.cb.onLoadError(e instanceof Error ? e.message : String(e));
 		} finally {
@@ -295,7 +306,7 @@ export class ViewerApp {
 	}
 
 	/** Index, orient and frame whatever is currently loaded, then report it to the host. */
-	private presentScene(name: string): void {
+	private presentScene(name: string, includeElementProperties = false): void {
 		this.reindex();
 		// Rotate the model into the current up-axis, then fit it. The fit view defines 100% zoom.
 		this.applyUpAxis();
@@ -319,7 +330,13 @@ export class ViewerApp {
 		// forced form also drains xeokit's deferred-task queue with no time budget, which right after
 		// a large model streams in is an unbounded stall.
 		this.viewer.scene.render();
-		this.cb.onModelLoaded(name, this.elementDescriptors(), this.viewer.scene.aabb, this.mode);
+		this.cb.onModelLoaded(
+			name,
+			this.elementDescriptors(includeElementProperties),
+			this.viewer.scene.aabb,
+			this.mode,
+			includeElementProperties
+		);
 	}
 
 	clearModel(): void {
@@ -1004,7 +1021,11 @@ export class ViewerApp {
 	private loadXkt(
 		bytes: ArrayBuffer,
 		name: string,
-		options?: { hostModelId?: string; globalizeObjectIds?: boolean }
+		options?: {
+			hostModelId?: string;
+			globalizeObjectIds?: boolean;
+			propertyIdentifierField?: string;
+		}
 	): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const uid = ++this.seq;
@@ -1012,13 +1033,22 @@ export class ViewerApp {
 			// The host id is the xeokit model id in a federation, so globalizeObjectIds prefixes each
 			// object with that id (`modelId#objectId`) and two files cannot share an element id.
 			const modelId = options?.hostModelId ?? 'm' + uid;
+			const identifierField = options?.propertyIdentifierField;
+			let identifiersBySet: ReturnType<typeof readXktPropertyIdentifiers> | undefined;
+			const captureIdentifiers = identifierField
+				? (metadata: unknown): unknown => {
+						identifiersBySet = readXktPropertyIdentifiers(metadata, identifierField);
+						return metadata;
+					}
+				: undefined;
 			let sm: SceneModel;
 			try {
 				sm = this.xktLoader.load({
 					id: modelId,
 					xkt: bytes,
 					edges: false,
-					globalizeObjectIds: options?.globalizeObjectIds === true
+					globalizeObjectIds: options?.globalizeObjectIds === true,
+					...(captureIdentifiers ? { loadIntoMetaScene: captureIdentifiers } : {})
 				});
 				// Set before streaming starts, or a big model flashes Y-up until 'loaded' fires.
 				if (this.zUp) sm.matrix = ZMAT;
@@ -1028,7 +1058,13 @@ export class ViewerApp {
 			}
 			sm.on('loaded', () => {
 				// Up-axis rotation is applied on creation above, not here.
-				const entities = buildXktEntityList(this.viewer.metaScene, this.viewer.scene, sm.id, color);
+				const entities = buildXktEntityList(
+					this.viewer.metaScene,
+					this.viewer.scene,
+					sm.id,
+					color,
+					identifiersBySet
+				);
 				this.models.push({
 					uid,
 					hostModelId: options?.hostModelId,
@@ -1063,7 +1099,7 @@ export class ViewerApp {
 		}
 	}
 
-	private elementDescriptors(): ElementDescriptor[] {
+	private elementDescriptors(includeElementProperties: boolean): ElementDescriptor[] {
 		const out: ElementDescriptor[] = [];
 		for (const m of this.models)
 			for (const e of m.entities)
@@ -1073,7 +1109,8 @@ export class ViewerApp {
 					parentId: e.parentId,
 					hasGeometry: e.hasGeometry,
 					type: e.type,
-					...(m.hostModelId ? { modelId: m.hostModelId } : {})
+					...(m.hostModelId ? { modelId: m.hostModelId } : {}),
+					...(includeElementProperties && e.properties ? { properties: e.properties } : {})
 				});
 		return out;
 	}
@@ -1403,17 +1440,16 @@ function isZUpMode(mode: ViewMode): boolean {
 }
 
 /**
- * The one metadata property that leaves the viewer: the host looks the element up by it in its own
- * records. Matched case-insensitively — the property comes from whatever authored the model.
+ * The host looks the selected element up by this metadata property in its own records.
+ * Matched case-insensitively because the model author supplies the key.
  */
-function readInstanceGuid(props?: Record<string, unknown>): string | undefined {
-	if (!props) return undefined;
-	for (const [k, v] of Object.entries(props)) {
-		if (k.toLowerCase() !== INSTANCE_GUID_PROPERTY.toLowerCase()) continue;
-		const value = String(v ?? '').trim();
-		return value === '' ? undefined : value;
+function readInstanceGuid(properties?: readonly ElementProperty[]): string | undefined {
+	const key = INSTANCE_GUID_PROPERTY.toLowerCase();
+	let value: unknown;
+	for (const property of properties ?? []) {
+		if (property.name.toLowerCase() === key) value = property.value;
 	}
-	return undefined;
+	return String(value ?? '').trim() || undefined;
 }
 
 function aabbCenter(obj: { aabb?: number[] } | null | undefined): [number, number, number] | null {

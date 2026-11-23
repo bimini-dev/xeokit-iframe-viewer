@@ -1,6 +1,7 @@
 // Internal viewer data model. Ported from the V7 reference's per-model / per-entity records.
 
 import type { SceneModel } from '@xeokit/xeokit-sdk';
+import type { ElementProperty } from '../protocol';
 
 export type SrcKind = 'json' | 'xkt';
 
@@ -8,7 +9,7 @@ export interface EntityRecord {
 	id: string;
 	label: string;
 	meshIds?: string[];
-	properties?: Record<string, unknown>;
+	properties?: readonly ElementProperty[];
 	/** Element type (often an IFC product type, e.g. `IfcFooting`); absent when unknown. */
 	type?: string;
 	/** Parent element id in the model's structure hierarchy; absent for root nodes. */

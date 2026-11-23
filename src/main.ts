@@ -14,8 +14,15 @@ const bridge: { ref?: ViewerBridge } = {};
 const app = new ViewerApp(
 	{ canvas, hint },
 	{
-		onModelLoaded: (name, elements, aabb, viewMode) =>
-			bridge.ref?.emit({ type: 'modelLoaded', name, elements, aabb, viewMode }),
+		onModelLoaded: (name, elements, aabb, viewMode, includeElementProperties) =>
+			bridge.ref?.emit({
+				type: 'modelLoaded',
+				name,
+				elements,
+				aabb,
+				viewMode,
+				...(includeElementProperties ? { elementPropertiesIncluded: true } : {})
+			}),
 		onLoadError: (message) => bridge.ref?.emit({ type: 'loadError', message }),
 		onElementSelected: (elementId, label, worldPos, camera, instanceGuid) =>
 			bridge.ref?.emit({

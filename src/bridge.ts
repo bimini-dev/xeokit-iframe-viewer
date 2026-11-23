@@ -75,7 +75,10 @@ export class ViewerBridge {
 				this.emit({ type: 'ready', protocolVersion: PROTOCOL_VERSION });
 				break;
 			case 'loadModel':
-				void this.app.loadModel(msg.bytes, msg.format, msg.name);
+				void this.app.loadModel(msg.bytes, msg.format, msg.name, {
+					includeElementProperties: msg.includeElementProperties === true,
+					propertyIdentifierField: msg.propertyIdentifierField
+				});
 				break;
 			case 'loadFederation':
 				void this.app.loadFederation(msg.models);

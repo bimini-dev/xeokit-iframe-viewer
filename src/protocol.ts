@@ -57,6 +57,13 @@ export interface CommentMarker {
 	anchor?: [number, number, number];
 }
 
+/** An exported property with its display name and an optional host-requested identifier. */
+export interface ElementProperty {
+	name: string;
+	value: unknown;
+	identifier?: string;
+}
+
 /** Minimal element descriptor surfaced back to the host after a model loads. */
 export interface ElementDescriptor {
 	id: string;
@@ -72,6 +79,8 @@ export interface ElementDescriptor {
 	 * federation (`loadFederation`); a single `loadModel` leaves it unset.
 	 */
 	modelId?: string;
+	/** Properties in export order, including entries with duplicate names or codes. */
+	properties?: readonly ElementProperty[];
 }
 
 // ── Host → Viewer ────────────────────────────────────────────────────────────
@@ -86,6 +95,10 @@ export interface LoadModelMessage {
 	type: 'loadModel';
 	format: ModelFormat;
 	name: string;
+	/** Include element metadata in the modelLoaded response. */
+	includeElementProperties?: boolean;
+	/** Optional custom XKT property field to expose as each property's identifier. */
+	propertyIdentifierField?: string;
 	/**
 	 * The model bytes. Sent as a transferable so it arrives zero-copy. The host is responsible
 	 * for passing a COPY (e.g. `bytes.slice(0)`) so its own cached buffer is not detached.
@@ -274,6 +287,8 @@ export interface ModelLoadedMessage {
 	type: 'modelLoaded';
 	name: string;
 	elements: ElementDescriptor[];
+	/** Confirms the metadata request was supported, including when the file has no values. */
+	elementPropertiesIncluded?: boolean;
 	/** World-space AABB [xMin,yMin,zMin, xMax,yMax,zMax]. */
 	aabb: number[];
 	/** The mode the viewer chose for this model — `2d` when it measured the geometry as flat. */
@@ -295,7 +310,7 @@ export interface ElementSelectedMessage {
 	/**
 	 * Value of the element's `InstanceGuid` metadata property — the host's key for looking the element
 	 * up in its own records. Absent when the selection was cleared, or when the model carries no such
-	 * property for this element. The rest of the model's properties stay inside the viewer.
+	 * property for this element.
 	 */
 	instanceGuid?: string;
 }

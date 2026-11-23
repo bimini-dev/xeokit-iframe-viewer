@@ -2,6 +2,7 @@
 // in-memory ArrayBuffer/text received over postMessage instead of a File from an <input>.
 
 import { SceneModel, type MetaScene, type Scene } from '@xeokit/xeokit-sdk';
+import type { ElementProperty } from '../protocol';
 import type { BuiltModel, EntityRecord, ModelData } from './types';
 
 // ── Plain JSON model ─────────────────────────────────────────────────────────
@@ -52,7 +53,9 @@ export function buildJsonModel(
 			id: entity.id,
 			label: entity.label ?? entity.id,
 			meshIds: entity.meshIds,
-			properties: entity.properties,
+			properties: entity.properties
+				? Object.entries(entity.properties).map(([name, value]) => ({ name, value }))
+				: undefined,
 			// Plain-JSON models are flat — no structure hierarchy to expose.
 			hasGeometry: !!entity.meshIds?.length,
 			_sceneId: sceneId,
@@ -72,11 +75,45 @@ export function buildJsonModel(
 }
 
 // ── XKT metadata → entity list ────────────────────────────────────────────────
+type XktPropertyMetadata = Readonly<Record<string, unknown>>;
+
+interface XktMetadata {
+	properties?: readonly XktPropertyMetadata[];
+	propertySets?: readonly {
+		id?: string | number;
+		properties?: readonly (XktPropertyMetadata | number)[];
+	}[];
+}
+
+/** Capture the requested field before xeokit converts the embedded records to Property instances. */
+export function readXktPropertyIdentifiers(
+	metadata: unknown,
+	field: string
+): ReadonlyMap<string, ReadonlyMap<number, string>> {
+	const bySet = new Map<string, ReadonlyMap<number, string>>();
+	if (!metadata || typeof metadata !== 'object') return bySet;
+
+	const data = metadata as XktMetadata;
+	for (const set of data.propertySets ?? []) {
+		if (set.id === undefined) continue;
+		const identifiers = new Map<number, string>();
+		for (const [index, entry] of (set.properties ?? []).entries()) {
+			// XKT can reference a shared property by its index instead of storing it inline.
+			const property = typeof entry === 'number' ? data.properties?.[entry] : entry;
+			const value = property && Object.hasOwn(property, field) ? property[field] : undefined;
+			if (typeof value === 'string' && value.trim()) identifiers.set(index, value.trim());
+		}
+		if (identifiers.size > 0) bySet.set(String(set.id), identifiers);
+	}
+	return bySet;
+}
+
 export function buildXktEntityList(
 	metaScene: MetaScene,
 	scene: Scene,
 	smId: string,
-	color: number[]
+	color: number[],
+	identifiersBySet?: ReadonlyMap<string, ReadonlyMap<number, string>>
 ): EntityRecord[] {
 	const metaModel = metaScene.metaModels[smId];
 	const metaObjs = metaModel ? Object.values(metaModel.metaObjects) : [];
@@ -85,11 +122,19 @@ export function buildXktEntityList(
 		// Keep structural/group metaobjects (no geometry of their own) so the host can render the
 		// full model hierarchy; they're flagged hasGeometry:false and carry no meshIds.
 		const hasGeometry = !!scene.objects[mo.id];
-		const properties: Record<string, unknown> = {};
+		const properties: ElementProperty[] = [];
 		for (const ps of mo.propertySets ?? []) {
-			for (const p of ps.properties ?? []) {
+			// The original set ID is stable even when xeokit prefixes IDs for federation.
+			const identifiers = ps && identifiersBySet?.get(String(ps.originalSystemId));
+			for (const [index, p] of (ps?.properties ?? []).entries()) {
+				if (typeof p?.name !== 'string') continue;
 				// xeokit types Property.value as `any`; narrow it to unknown for our typed record.
-				if (p && p.name !== undefined) properties[p.name] = p.value as unknown;
+				const identifier = identifiers?.get(index);
+				properties.push({
+					name: p.name,
+					value: p.value as unknown,
+					...(identifier ? { identifier } : {})
+				});
 			}
 		}
 		entities.push({
