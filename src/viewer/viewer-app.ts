@@ -373,6 +373,30 @@ export class ViewerApp {
 		if (aabb) this.flyToAabb(aabb);
 	}
 
+	/**
+	 * Highlight and frame the entity whose InstanceGuid matches the host record.
+	 * Properties stay in the viewer; the host only sends the guid it stored at acceptance.
+	 */
+	focusInstance(modelId: string | undefined, instanceId: string): void {
+		const entity = this.findInstance(modelId, instanceId);
+		if (!entity) return;
+		this.selectElement(entity.id);
+		this.focusElement(entity.id);
+	}
+
+	private findInstance(modelId: string | undefined, instanceId: string): EntityRecord | undefined {
+		const wanted = instanceId.trim().toLowerCase();
+		if (!wanted) return undefined;
+		for (const model of this.models) {
+			if (modelId && model.hostModelId !== modelId) continue;
+			for (const entity of model.entities) {
+				const guid = readInstanceGuid(entity.properties)?.toLowerCase();
+				if (guid === wanted) return entity;
+			}
+		}
+		return undefined;
+	}
+
 	/** Fly to frame an AABB, keeping the current view direction. */
 	private flyToAabb(aabb: number[]): void {
 		const center = aabbCenter3(aabb);

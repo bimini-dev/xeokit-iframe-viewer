@@ -101,6 +101,9 @@ export class ViewerBridge {
 			case 'focusElement':
 				this.app.focusElement(msg.elementId, msg.memberIds);
 				break;
+			case 'focusInstance':
+				this.app.focusInstance(msg.modelId, msg.instanceId);
+				break;
 			case 'setCamera':
 				this.app.setCamera(msg.camera);
 				break;

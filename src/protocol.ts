@@ -167,6 +167,17 @@ export interface FocusElementMessage {
 	memberIds?: string[];
 }
 
+/**
+ * Highlight and frame the element whose `InstanceGuid` metadata matches `instanceId`.
+ * The viewer already keeps that property on each loaded entity, so the host does not send the
+ * xeokit id. `modelId` limits the search to one federation model.
+ */
+export interface FocusInstanceMessage {
+	type: 'focusInstance';
+	modelId?: string;
+	instanceId: string;
+}
+
 export interface SetCameraMessage {
 	type: 'setCamera';
 	camera: CameraState;
@@ -270,6 +281,7 @@ export type HostToViewerMessage =
 	| SetSelectedMarkerMessage
 	| SetHoveredMarkerMessage
 	| FocusElementMessage
+	| FocusInstanceMessage
 	| SetCameraMessage
 	| SelectElementMessage
 	| ClearModelMessage
