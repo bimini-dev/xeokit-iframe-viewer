@@ -281,7 +281,11 @@ export class ViewerApp {
 	 * the combined scene once. Object ids are prefixed per model so the same id in two files cannot
 	 * collide. A failure drops any model that did load, so the host never sees a partial federation.
 	 */
-	async loadFederation(models: FederationModel[]): Promise<void> {
+	async loadFederation(
+		models: FederationModel[],
+		options: { includeElementProperties?: boolean; propertyIdentifierField?: string } = {}
+	): Promise<void> {
+		const { includeElementProperties = false, propertyIdentifierField } = options;
 		this.els.canvas.style.visibility = 'hidden';
 		try {
 			this.clearModel();
@@ -289,14 +293,15 @@ export class ViewerApp {
 				if (model.format === 'xkt') {
 					await this.loadXkt(model.bytes, model.name, {
 						hostModelId: model.modelId,
-						globalizeObjectIds: true
+						globalizeObjectIds: true,
+						propertyIdentifierField: includeElementProperties ? propertyIdentifierField : undefined
 					});
 				} else {
 					await this.loadJson(model.bytes, model.name, model.modelId);
 				}
 			}
 			const name = models.map((model) => model.name).join(', ');
-			this.presentScene(name);
+			this.presentScene(name, includeElementProperties);
 		} catch (e: unknown) {
 			this.clearModel();
 			this.cb.onLoadError(e instanceof Error ? e.message : String(e));

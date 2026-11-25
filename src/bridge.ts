@@ -81,7 +81,10 @@ export class ViewerBridge {
 				});
 				break;
 			case 'loadFederation':
-				void this.app.loadFederation(msg.models);
+				void this.app.loadFederation(msg.models, {
+					includeElementProperties: msg.includeElementProperties === true,
+					propertyIdentifierField: msg.propertyIdentifierField
+				});
 				break;
 			case 'setModelVisibility':
 				this.app.setModelVisibility(msg.modelIds, msg.visible);

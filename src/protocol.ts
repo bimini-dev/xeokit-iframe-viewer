@@ -127,6 +127,10 @@ export interface FederationModel {
 export interface LoadFederationMessage {
 	type: 'loadFederation';
 	models: FederationModel[];
+	/** Include element metadata in the modelLoaded response. */
+	includeElementProperties?: boolean;
+	/** Optional custom XKT property field to expose as each property's identifier. */
+	propertyIdentifierField?: string;
 }
 
 /** Show or hide whole models previously loaded by `loadFederation`. */
