@@ -1092,6 +1092,7 @@ export class ViewerApp {
 					this.viewer.scene,
 					sm.id,
 					color,
+					name,
 					identifiersBySet
 				);
 				this.models.push({

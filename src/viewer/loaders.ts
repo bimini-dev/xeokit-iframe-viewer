@@ -113,10 +113,15 @@ export function buildXktEntityList(
 	scene: Scene,
 	smId: string,
 	color: number[],
+	modelName: string,
 	identifiersBySet?: ReadonlyMap<string, ReadonlyMap<number, string>>
 ): EntityRecord[] {
 	const metaModel = metaScene.metaModels[smId];
 	const metaObjs = metaModel ? Object.values(metaModel.metaObjects) : [];
+	// The XKT root keeps the source CAD name, often a generic converter name such as
+	// "autocad_3d_model". The host name is the document these elements belong to.
+	const modelLabel: string = modelName.trim();
+	const rootIds = new Set<string>((metaModel?.rootMetaObjects ?? []).map((root) => root.id));
 	const entities: EntityRecord[] = [];
 	for (const mo of metaObjs) {
 		// Keep structural/group metaobjects (no geometry of their own) so the host can render the
@@ -139,7 +144,7 @@ export function buildXktEntityList(
 		}
 		entities.push({
 			id: mo.id,
-			label: mo.name || mo.id,
+			label: rootIds.has(mo.id) && modelLabel ? modelLabel : mo.name || mo.id,
 			meshIds: hasGeometry ? [mo.id] : undefined,
 			properties,
 			type: mo.type,
